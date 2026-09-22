@@ -1,8 +1,7 @@
 import argparse
 
-from src.config import get_settings
-from src.telegram_notifier import TelegramNotifier
-
+from config import get_settings
+from telegram_notifier import TelegramNotifier
 
 def test_telegram() -> None:
     settings = get_settings()
