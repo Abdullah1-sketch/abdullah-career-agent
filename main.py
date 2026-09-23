@@ -1,7 +1,9 @@
 import argparse
 
+from career_radar import build_daily_radar_message
 from config import get_settings
 from telegram_notifier import TelegramNotifier
+
 
 def test_telegram() -> None:
     settings = get_settings()
@@ -15,20 +17,7 @@ def test_telegram() -> None:
         bot_token=settings.telegram_bot_token,
         chat_id=settings.telegram_chat_id,
     )
-    notifier.send_message(
-       """Abdullah Career Agent - Daily Career Radar
-
-Goal: increase Abdullah's chances of reaching data analyst interviews in Saudi Arabia.
-
-Today's mode: system check only.
-
-Next build step:
-1. Collect Saudi data analyst opportunities.
-2. Score each opportunity by fit.
-3. Recommend the best path to interview.
-4. Alert only for strong opportunities.
-"""
-    )
+    notifier.send_message(build_daily_radar_message())
 
 
 def main() -> None:
@@ -45,4 +34,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
