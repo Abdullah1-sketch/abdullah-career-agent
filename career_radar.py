@@ -4,6 +4,7 @@ from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
 from manual_visit_strategy import build_manual_visit_radar
+from application_tracker import build_application_tracking_note
 
 
 TITLE_TRANSLATIONS = {
@@ -264,6 +265,7 @@ def build_daily_radar_message() -> str:
             "\nتحرك يدوي إذا كان يزيد فرصة المقابلة:\n"
             + build_manual_visit_radar(limit=2)
         )
+        sections.append(build_application_tracking_note())
     else:
         sections.append("لا توجد اليوم فرصة جديدة تستحق التقديم.")
         sections.append("تمت مراقبة المصادر بدون شاغر مناسب جديد.")
