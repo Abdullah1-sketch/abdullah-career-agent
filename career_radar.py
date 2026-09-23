@@ -6,12 +6,12 @@ from sources import SOURCES
 
 def build_daily_radar_message() -> str:
     sample_opportunity = {
-        "title": "Junior Data Analyst",
-        "company": "Example Saudi Company",
-        "location": "Riyadh, Saudi Arabia",
-        "description": "Entry level role requiring Excel, Power BI, SQL, dashboards, and reporting.",
+        "title": "محلل بيانات مبتدئ",
+        "company": "شركة سعودية تجريبية",
+        "location": "الرياض، السعودية",
+        "description": "فرصة مبتدئة تتطلب Excel و Power BI و SQL ولوحات معلومات وتقارير.",
         "url": "https://example.com/careers/apply",
-        "source": "System sample",
+        "source": "اختبار النظام",
     }
 
     opportunity = Opportunity(
@@ -30,28 +30,60 @@ def build_daily_radar_message() -> str:
         source["name"] for source in SOURCES if source["priority"] == "high"
     ]
 
-    return f"""Abdullah Career Agent - Daily Career Radar
+    reasons_ar = {
+        "Relevant data-analysis title": "المسمى قريب من تحليل البيانات",
+        "Matches Abdullah's current skills or entry-level path": "يناسب مهاراتك الحالية أو مسار المبتدئين",
+        "Location fits Saudi Arabia preferences": "الموقع مناسب لتفضيلاتك داخل السعودية",
+        "Has a clearer path to interview or outreach": "يوجد طريق أوضح للتقديم أو التواصل",
+        "May be too senior or outside target path": "قد تكون الفرصة أعلى من مستواك الحالي أو خارج المسار",
+    }
 
-System status: Working
+    actions_ar = {
+        "Apply officially as soon as possible": "قدّم رسميًا بأسرع وقت",
+        "Prepare a personalized LinkedIn message": "جهّز رسالة LinkedIn مخصصة",
+        "Consider a small company-relevant portfolio angle": "فكّر بزاوية مشروع مصغر مناسب للشركة",
+        "Apply officially": "قدّم رسميًا",
+        "Keep in daily report and monitor": "احتفظ بها في التقرير اليومي وراقبها",
+        "Do not spend much time unless new signals appear": "لا تصرف عليها وقتًا كبيرًا إلا إذا ظهرت إشارات جديدة",
+    }
 
-Sample opportunity:
+    path_ar = {
+        "High-effort interview push": "دفع قوي للوصول إلى مقابلة",
+        "Standard application": "تقديم رسمي عادي",
+        "Monitor only": "مراقبة فقط",
+    }
+
+    translated_reasons = [
+        reasons_ar.get(reason, reason) for reason in record["reasons"]
+    ]
+    translated_actions = [
+        actions_ar.get(action, action) for action in record["recommended_actions"]
+    ]
+    translated_path = path_ar.get(record["interview_path"], record["interview_path"])
+
+    return f"""رادار عبدالله المهني
+
+الحالة: يعمل
+
+فرصة تجريبية:
 {record["title"]} - {record["company"]}
-Location: {record["location"]}
-Score: {record["score"]}/100
-Priority: {record["priority"]}
 
-Why:
-{chr(10).join("- " + reason for reason in record["reasons"])}
+الموقع: {record["location"]}
+درجة التوافق: {record["score"]}/100
+الأولوية: {record["priority"]}
 
-Best path:
-{record["interview_path"]}
+سبب الترشيح:
+{chr(10).join("- " + reason for reason in translated_reasons)}
 
-Actions:
-{chr(10).join("- " + action for action in record["recommended_actions"])}
+أفضل مسار:
+{translated_path}
 
-High-priority sources:
+الخطوات المقترحة:
+{chr(10).join("- " + action for action in translated_actions)}
+
+المصادر عالية الأولوية:
 {chr(10).join("- " + source for source in high_priority_sources)}
 
-Next build step:
-Connect real opportunity sources and remove the sample opportunity.
+الخطوة القادمة:
+ربط مصادر الفرص الحقيقية وإزالة الفرصة التجريبية.
 """
