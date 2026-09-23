@@ -265,17 +265,11 @@ def build_daily_radar_message() -> str:
             + build_manual_visit_radar(limit=2)
         )
     else:
-        sections.append("لا توجد اليوم فرصة جديدة تستحق التقديم")
-        sections.append("تمت مراقبة الشركات والمصادر بدون شاغر مناسب جديد.")
+        sections.append("لا توجد اليوم فرصة جديدة تستحق التقديم.")
+        sections.append("تمت مراقبة المصادر بدون شاغر مناسب جديد.")
 
     if early_signals:
         sections.append("\nإشارات مختصرة للمراقبة:")
         sections.extend(build_opportunity_section(item) for item in early_signals[:2])
 
-    return f"""رادار عبدالله المهني
-
-{chr(10).join(sections)}
-
-ملاحظة:
-التقديم اليدوي يظهر فقط إذا كان ممكن يزيد فرصة المقابلة، وبالرياض والقصيم فقط.
-"""
+    return "\n\n".join(sections)
