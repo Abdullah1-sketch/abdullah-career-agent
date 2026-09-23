@@ -16,7 +16,18 @@ def test_telegram() -> None:
         chat_id=settings.telegram_chat_id,
     )
     notifier.send_message(
-        "Abdullah Career Agent is connected. Next: job-market monitoring."
+       """Abdullah Career Agent - Daily Career Radar
+
+Goal: increase Abdullah's chances of reaching data analyst interviews in Saudi Arabia.
+
+Today's mode: system check only.
+
+Next build step:
+1. Collect Saudi data analyst opportunities.
+2. Score each opportunity by fit.
+3. Recommend the best path to interview.
+4. Alert only for strong opportunities.
+"""
     )
 
 
