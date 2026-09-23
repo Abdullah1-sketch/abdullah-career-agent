@@ -3,6 +3,7 @@ from interview_path import recommend_interview_path
 from application_log import build_application_record
 from sources import SOURCES
 from company_watchlist import build_company_watchlist_summary
+from search_queries import build_search_links_summary
 
 
 def build_daily_radar_message() -> str:
@@ -95,6 +96,9 @@ def build_daily_radar_message() -> str:
 
 شركات تستحق تركيز خاص:
 {build_company_watchlist_summary(10)}
+
+روابط بحث ذكية:
+{build_search_links_summary(8)}
 
 الخطوة القادمة:
 ربط مصادر الفرص الحقيقية وإزالة الفرصة التجريبية.
