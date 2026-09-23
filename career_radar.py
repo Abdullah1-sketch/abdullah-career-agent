@@ -2,6 +2,7 @@ from opportunity_scoring import Opportunity, score_opportunity
 from interview_path import recommend_interview_path
 from application_log import build_application_record
 from sources import SOURCES
+from company_watchlist import build_company_watchlist_summary
 
 
 def build_daily_radar_message() -> str:
@@ -29,6 +30,12 @@ def build_daily_radar_message() -> str:
     high_priority_sources = [
         source["name"] for source in SOURCES if source["priority"] == "high"
     ]
+
+    priority_ar = {
+        "Strong": "قوية",
+        "Medium": "متوسطة",
+        "Low": "منخفضة",
+    }
 
     reasons_ar = {
         "Relevant data-analysis title": "المسمى قريب من تحليل البيانات",
@@ -59,6 +66,8 @@ def build_daily_radar_message() -> str:
     translated_actions = [
         actions_ar.get(action, action) for action in record["recommended_actions"]
     ]
+
+    translated_priority = priority_ar.get(record["priority"], record["priority"])
     translated_path = path_ar.get(record["interview_path"], record["interview_path"])
 
     return f"""رادار عبدالله المهني
@@ -70,7 +79,7 @@ def build_daily_radar_message() -> str:
 
 الموقع: {record["location"]}
 درجة التوافق: {record["score"]}/100
-الأولوية: {record["priority"]}
+الأولوية: {translated_priority}
 
 سبب الترشيح:
 {chr(10).join("- " + reason for reason in translated_reasons)}
@@ -83,6 +92,9 @@ def build_daily_radar_message() -> str:
 
 المصادر عالية الأولوية:
 {chr(10).join("- " + source for source in high_priority_sources)}
+
+شركات تستحق تركيز خاص:
+{build_company_watchlist_summary(10)}
 
 الخطوة القادمة:
 ربط مصادر الفرص الحقيقية وإزالة الفرصة التجريبية.
