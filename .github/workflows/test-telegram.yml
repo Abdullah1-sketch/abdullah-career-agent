@@ -1,10 +1,12 @@
-name: Test Telegram
+name: Abdullah Career Agent
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 14 * * *"
 
 jobs:
-  test-telegram:
+  daily-career-radar:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Send Telegram test message
+      - name: Send daily career radar
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
