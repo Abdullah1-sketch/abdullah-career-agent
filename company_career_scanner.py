@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -30,28 +30,14 @@ ENTRY_LEVEL_KEYWORDS = [
     "coop",
     "intern",
     "trainee",
-    "0-1",
-    "0-2",
-    "0-3",
     "حديث تخرج",
     "خريج",
     "تمهير",
     "تدريب",
 ]
 
-GENERIC_CAREER_WORDS = [
-    "careers",
-    "career",
-    "jobs",
-    "join us",
-    "work with us",
-    "الوظائف",
-    "التوظيف",
-    "انضم",
-]
-
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.3"
+    "User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.4"
 }
 
 
@@ -64,18 +50,24 @@ def contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword.lower() in text for keyword in keywords)
 
 
-def classify_signal(title_text: str, url: str) -> str:
-    combined = f"{title_text} {url}".lower()
+def is_valid_job_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in ["http", "https"]:
+        return False
 
-    if contains_any(combined, JOB_TITLE_KEYWORDS):
-        return "apply_now"
+    blocked = ["tel:", "mailto:", "whatsapp", "facebook", "instagram", "twitter", "x.com"]
+    return not any(term in url.lower() for term in blocked)
 
-    if contains_any(combined, ENTRY_LEVEL_KEYWORDS) and contains_any(
-        combined, ["data", "bi", "analytics", "تحليل", "بيانات"]
-    ):
-        return "apply_now"
 
-    return "monitor_company"
+def is_noise_text(text: str) -> bool:
+    cleaned = re.sub(r"[\s\-\+\(\)]", "", text)
+    if cleaned.isdigit():
+        return True
+
+    if len(text.strip()) < 4:
+        return True
+
+    return False
 
 
 def build_company_label(target: dict) -> str:
@@ -96,14 +88,28 @@ def extract_job_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
             continue
 
         full_url = urljoin(base_url, href)
+
+        if not is_valid_job_url(full_url):
+            continue
+
+        if is_noise_text(text):
+            continue
+
         combined = f"{text} {full_url}"
 
-        if contains_any(combined, JOB_TITLE_KEYWORDS + ENTRY_LEVEL_KEYWORDS):
+        has_job_title = contains_any(combined, JOB_TITLE_KEYWORDS)
+        has_entry_signal = contains_any(combined, ENTRY_LEVEL_KEYWORDS)
+        has_data_context = contains_any(
+            combined,
+            ["data", "analytics", "bi", "reporting", "power bi", "تحليل", "بيانات", "تقارير"],
+        )
+
+        if has_job_title or (has_entry_signal and has_data_context):
             job_links.append(
                 {
                     "title": text,
                     "url": full_url,
-                    "signal_type": classify_signal(text, full_url),
+                    "signal_type": "apply_now" if has_job_title else "monitor_signal",
                 }
             )
 
