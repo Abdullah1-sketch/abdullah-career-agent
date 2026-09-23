@@ -6,6 +6,7 @@ from company_watchlist import build_company_watchlist_summary
 from search_queries import build_search_links_summary
 from company_career_links import build_career_targets_summary
 from manual_opportunities import get_manual_opportunities
+from company_career_scanner import scan_company_career_pages
 
 
 def translate_priority(priority: str) -> str:
@@ -58,14 +59,10 @@ def build_opportunity_section(opportunity_data: dict) -> str:
     interview_path = recommend_interview_path(opportunity_data, scoring)
     record = build_application_record(opportunity_data, scoring, interview_path)
 
-    translated_reasons = [
-        translate_reason(reason) for reason in record["reasons"]
-    ]
-    translated_actions = [
-        translate_action(action) for action in record["recommended_actions"]
-    ]
+    translated_reasons = [translate_reason(reason) for reason in record["reasons"]]
+    translated_actions = [translate_action(action) for action in record["recommended_actions"]]
 
-    return f"""فرصة:
+    return f"""فرصة / إشارة:
 {record["title"]} - {record["company"]}
 
 الموقع: {record["location"]}
@@ -87,8 +84,18 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 """
 
 
+def get_current_opportunities() -> list[dict]:
+    scanned = scan_company_career_pages(limit=10)
+    manual = get_manual_opportunities()
+
+    if scanned:
+        return scanned + manual
+
+    return manual
+
+
 def build_daily_radar_message() -> str:
-    opportunities = get_manual_opportunities()
+    opportunities = get_current_opportunities()
     opportunity_sections = [
         build_opportunity_section(opportunity) for opportunity in opportunities[:3]
     ]
@@ -101,7 +108,7 @@ def build_daily_radar_message() -> str:
 
 الحالة: يعمل
 
-أفضل الفرص الحالية:
+أفضل الفرص / الإشارات الحالية:
 {chr(10).join(opportunity_sections)}
 
 المصادر عالية الأولوية:
@@ -116,6 +123,9 @@ def build_daily_radar_message() -> str:
 أفضل أهداف توظيف مباشرة:
 {build_career_targets_summary(4)}
 
+ملاحظة:
+إذا ظهرت إشارة من صفحة شركة، راجع الرابط يدويًا ثم نقرر: تقديم رسمي، رسالة مخصصة، أو مشروع مصغر.
+
 الخطوة القادمة:
-استبدال الفرص اليدوية بفرص حقيقية من المصادر.
+تحسين السحب من ATS وربط فرص أكثر دقة من الشركات.
 """
