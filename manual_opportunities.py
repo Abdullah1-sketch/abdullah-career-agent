@@ -1,14 +1,15 @@
-MANUAL_OPPORTUNITIES = [
-    {
-        "title": "محلل بيانات مبتدئ",
-        "company": "شركة سعودية تجريبية",
-        "location": "الرياض، السعودية",
-        "description": "فرصة مبتدئة تتطلب Excel و Power BI و SQL ولوحات معلومات وتقارير.",
-        "url": "https://example.com/careers/apply",
-        "source": "Manual sample",
-    }
-]
+MANUAL_OPPORTUNITIES = []
 
 
 def get_manual_opportunities() -> list[dict]:
+    """
+    Manual opportunities are disabled for now.
+
+    This prevents fake/sample opportunities such as:
+    - Manual sample
+    - Example Saudi Company
+    - example.com
+
+    Real opportunities should come from trusted sources only.
+    """
     return MANUAL_OPPORTUNITIES
