@@ -1,0 +1,86 @@
+SOURCES = [
+    {
+        "name": "LinkedIn",
+        "type": "job_board",
+        "priority": "high",
+        "purpose": "Find data analyst jobs and recruiter posts.",
+    },
+    {
+        "name": "Indeed",
+        "type": "job_board",
+        "priority": "medium",
+        "purpose": "Find public Saudi data analyst listings.",
+    },
+    {
+        "name": "Jadarat",
+        "type": "government_jobs",
+        "priority": "high",
+        "purpose": "Track government and semi-government opportunities.",
+    },
+    {
+        "name": "Taqat",
+        "type": "tamheer_training",
+        "priority": "high",
+        "purpose": "Track Tamheer and entry-level training opportunities.",
+    },
+    {
+        "name": "Sabbar",
+        "type": "local_jobs",
+        "priority": "medium",
+        "purpose": "Track local Saudi opportunities.",
+    },
+    {
+        "name": "Company Career Pages",
+        "type": "direct_company_sources",
+        "priority": "high",
+        "purpose": "Catch roles before they spread to job boards.",
+    },
+    {
+        "name": "ATS Boards",
+        "type": "original_job_sources",
+        "priority": "high",
+        "purpose": "Track Greenhouse, Lever, Ashby, Workday, Oracle careers.",
+    },
+    {
+        "name": "X and LinkedIn Early Signals",
+        "type": "early_signals",
+        "priority": "high",
+        "purpose": "Detect hiring signals, team growth, projects, and recruiter posts.",
+    },
+    {
+        "name": "Saudi Digital Academy",
+        "type": "career_growth",
+        "priority": "medium",
+        "purpose": "Track training programs that improve employability.",
+    },
+    {
+        "name": "Misk",
+        "type": "career_growth",
+        "priority": "medium",
+        "purpose": "Track programs, internships, and career opportunities.",
+    },
+    {
+        "name": "Monsha'at",
+        "type": "market_signals",
+        "priority": "medium",
+        "purpose": "Track SME and startup opportunities or initiatives.",
+    },
+    {
+        "name": "HRDF",
+        "type": "employment_support",
+        "priority": "high",
+        "purpose": "Track employment support, Tamheer, and training pathways.",
+    },
+    {
+        "name": "MCIT and Digital Government Authority",
+        "type": "government_signals",
+        "priority": "medium",
+        "purpose": "Track digital transformation initiatives and hiring signals.",
+    },
+    {
+        "name": "PIF Company Careers",
+        "type": "strategic_company_sources",
+        "priority": "high",
+        "purpose": "Track strong Saudi companies with data and analytics needs.",
+    },
+]
