@@ -4,6 +4,7 @@ from application_log import build_application_record
 from sources import SOURCES
 from company_watchlist import build_company_watchlist_summary
 from search_queries import build_search_links_summary
+from company_career_links import build_career_targets_summary
 
 
 def build_daily_radar_message() -> str:
@@ -95,10 +96,13 @@ def build_daily_radar_message() -> str:
 {chr(10).join("- " + source for source in high_priority_sources)}
 
 شركات تستحق تركيز خاص:
-{build_company_watchlist_summary(10)}
+{build_company_watchlist_summary(8)}
 
 روابط بحث ذكية:
-{build_search_links_summary(8)}
+{build_search_links_summary(6)}
+
+أفضل أهداف توظيف مباشرة:
+{build_career_targets_summary(4)}
 
 الخطوة القادمة:
 ربط مصادر الفرص الحقيقية وإزالة الفرصة التجريبية.
