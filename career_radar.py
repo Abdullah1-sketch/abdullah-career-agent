@@ -44,9 +44,18 @@ def translate_reason(reason: str) -> str:
     return {
         "Relevant data-analysis title": "المسمى قريب من تحليل البيانات",
         "Matches Abdullah's current skills or entry-level path": "يناسب مهاراتك الحالية أو مسار المبتدئين",
+        "Matches Abdullah's entry-level path": "مناسب لمسار مبتدئ / حديث تخرج / تمهير",
+        "Matches Abdullah's current skills": "يناسب مهاراتك الحالية: Excel وPower BI والتحليل والتقارير",
+        "Matches Abdullah's SQL learning path": "SQL مطلوب أو مفيد، وهو ضمن مسارك الحالي",
+        "Location fits Riyadh priority": "الموقع يناسب أولوية الرياض",
+        "Location fits Eastern Province priority": "الموقع يناسب أولوية الشرقية",
+        "Location fits Qassim priority": "الموقع يناسب أولوية القصيم",
         "Location fits Saudi Arabia preferences": "الموقع مناسب لتفضيلاتك داخل السعودية",
+        "Remote option may fit": "الخيار عن بعد وقد يناسبك",
+        "Has a skill gap Abdullah can prepare for": "فيه مهارة تحتاج تجهيز قبل التقديم أو المقابلة",
         "Has a clearer path to interview or outreach": "يوجد طريق أوضح للتقديم أو التواصل",
         "May be too senior or outside target path": "قد تكون الفرصة أعلى من مستواك الحالي أو خارج المسار",
+        "Not enough job details to confirm fit": "التفاصيل غير كافية لتأكيد التوافق",
     }.get(reason, reason)
 
 
