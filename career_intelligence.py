@@ -1,3 +1,6 @@
+from datetime import date
+
+
 COMPANY_FIT_MAP = {
     "Foodics": {
         "arabic_label": "فودكس – تقنية المطاعم ونقاط البيع",
@@ -69,6 +72,16 @@ COMPANY_FIT_MAP = {
             "أقدر أرسل لكم ملف الأعمال إذا فيه فرصة مناسبة."
         ),
     },
+    "Lean": {
+        "arabic_label": "لين تكنولوجيز – تقنية مالية وخدمات مصرفية مفتوحة",
+        "best_project": "SAMA POS Analysis",
+        "why_it_fits": "مشروع SAMA POS قريب من التقنية المالية وتحليل المدفوعات.",
+        "door_opener": (
+            "السلام عليكم، أنا عبدالله خريج رياضيات ومحلل بيانات مبتدئ. "
+            "عندي مشروع Power BI على بيانات SAMA POS، وأشوفه قريب من مجال التقنية المالية والخدمات المصرفية المفتوحة. "
+            "إذا فيه فرصة Junior Data Analyst أو BI Analyst أتشرف أرسل لكم ملف الأعمال."
+        ),
+    },
 }
 
 
@@ -81,7 +94,7 @@ DAILY_ACTIONS = [
     {
         "title": "جهز رسالة LinkedIn قصيرة",
         "reason": "التقديم الرسمي وحده أحيانًا ما يكفي، الرسالة المختصرة تزيد فرصة الانتباه لك.",
-        "task": "جهز رسالة عامة لمسؤول توظيف، وبعدها نخصصها حسب الشركة.",
+        "task": "اكتب رسالة من 3 أسطر لمسؤول توظيف: من أنت، وش مشروعك الأقرب، وش نوع الفرصة اللي تبحث عنها.",
     },
     {
         "title": "راجع مشروع Excel",
@@ -96,7 +109,17 @@ DAILY_ACTIONS = [
     {
         "title": "حسّن عنوان LinkedIn",
         "reason": "العنوان يساعد مسؤولي التوظيف يفهمون مسارك بسرعة.",
-        "task": "خله واضح: Junior Data Analyst | Power BI | Excel | SQL Learner.",
+        "task": "استخدم عنوان واضح: Junior Data Analyst | Power BI | Excel | SQL Learner.",
+    },
+    {
+        "title": "جهز رد المقابلة الأول",
+        "reason": "أول سؤال غالبًا: تكلم عن نفسك. جاهزية الجواب تفرق.",
+        "task": "اكتب جواب 45 ثانية: خريج رياضيات، مهتم بتحليل البيانات، عندك Power BI وExcel، وتتعلم SQL.",
+    },
+    {
+        "title": "ابحث يدويًا عن شركة واحدة",
+        "reason": "أحيانًا أفضل فرصة تجي من صفحة الشركة أو مسؤول توظيف قبل ما تنتشر.",
+        "task": "اختر شركة واحدة في الرياض أو القصيم، وافتح صفحة الوظائف وابحث عن Data / BI / Reporting.",
     },
 ]
 
@@ -114,8 +137,13 @@ def get_company_fit(company_name: str) -> dict | None:
     return None
 
 
+def get_today_action() -> dict:
+    index = date.today().toordinal() % len(DAILY_ACTIONS)
+    return DAILY_ACTIONS[index]
+
+
 def build_daily_action_brief() -> str:
-    action = DAILY_ACTIONS[0]
+    action = get_today_action()
 
     return f"""وش تسوي اليوم؟
 
