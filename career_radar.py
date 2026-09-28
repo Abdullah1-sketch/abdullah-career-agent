@@ -5,6 +5,10 @@ from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
 from manual_visit_strategy import build_manual_visit_radar
 from application_tracker import build_application_tracking_note
+from career_intelligence import (
+    build_daily_action_brief,
+    build_opportunity_battle_card,
+)
 
 
 TITLE_TRANSLATIONS = {
@@ -142,19 +146,6 @@ def build_missing_items(opportunity_data: dict) -> list[str]:
     return missing
 
 
-def build_strong_extra_move(opportunity_data: dict, score: int) -> str:
-    if score < 80 or opportunity_data.get("is_real_job") is False:
-        return ""
-
-    company = opportunity_data.get("company", "الشركة")
-
-    return (
-        "\nتحرك إضافي:\n"
-        f"- بعد التقديم، أرسل رسالة قصيرة لمسؤول توظيف أو شخص من فريق البيانات في {company}.\n"
-        "- اربط الرسالة بمشروع مناسب من Portfolio."
-    )
-
-
 def build_opportunity_section(opportunity_data: dict) -> str:
     opportunity = Opportunity(
         title=opportunity_data["title"],
@@ -192,7 +183,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 {chr(10).join("- " + action for action in actions)}
 
 الرابط:
-{record["url"]}{build_strong_extra_move(opportunity_data, score)}
+{record["url"]}
 """
 
 
@@ -246,32 +237,39 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
 def build_daily_radar_message() -> str:
     opportunities = sort_opportunities(get_current_opportunities())
 
-    apply_now = [
-        opportunity for opportunity in opportunities
-        if get_category(opportunity, 0).startswith("🟢")
-    ]
+    strong_opportunities = []
 
-    early_signals = [
-        opportunity for opportunity in opportunities
-        if get_category(opportunity, 0).startswith("🟡")
-    ]
-
-    sections = []
-
-    if apply_now:
-        sections.append("فرص تستحق التقديم اليوم:")
-        sections.extend(build_opportunity_section(item) for item in apply_now[:4])
-        sections.append(
-            "\nتحرك يدوي إذا كان يزيد فرصة المقابلة:\n"
-            + build_manual_visit_radar(limit=2)
+    for opportunity in opportunities:
+        scored = score_opportunity(
+            Opportunity(
+                title=opportunity["title"],
+                company=opportunity["company"],
+                location=opportunity["location"],
+                description=opportunity["description"],
+                url=opportunity["url"],
+            )
         )
-        sections.append(build_application_tracking_note())
-    else:
-        sections.append("لا توجد اليوم فرصة جديدة تستحق التقديم.")
-        sections.append("تمت مراقبة المصادر بدون شاغر مناسب جديد.")
 
-    if early_signals:
-        sections.append("\nإشارات مختصرة للمراقبة:")
-        sections.extend(build_opportunity_section(item) for item in early_signals[:2])
+        score = scored["score"]
+        category = get_category(opportunity, score)
+
+        if category.startswith("🟢") and score >= 70:
+            strong_opportunities.append((opportunity, score))
+
+    if not strong_opportunities:
+        return build_daily_action_brief()
+
+    sections = ["فرص تستحق التقديم اليوم:"]
+
+    for opportunity, score in strong_opportunities[:4]:
+        sections.append(build_opportunity_section(opportunity))
+        sections.append(build_opportunity_battle_card(opportunity, score))
+
+    sections.append(
+        "\nتحرك يدوي إذا كان يزيد فرصة المقابلة:\n"
+        + build_manual_visit_radar(limit=2)
+    )
+
+    sections.append(build_application_tracking_note())
 
     return "\n\n".join(sections)
