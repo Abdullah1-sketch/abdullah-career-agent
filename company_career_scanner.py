@@ -16,9 +16,24 @@ JOB_TITLE_KEYWORDS = [
     "reporting analyst",
     "data reporting",
     "power bi analyst",
+    "analytics analyst",
+    "hr analytics analyst",
+    "people analytics",
+    "people analytics analyst",
+    "workforce analytics",
+    "workforce analytics analyst",
+    "talent analytics",
+    "performance analyst",
+    "insights analyst",
+    "business analyst",
+    "operations analyst",
     "محلل بيانات",
     "محلل ذكاء أعمال",
     "محلل تقارير",
+    "محلل تحليلات",
+    "تحليلات الموارد البشرية",
+    "تحليلات الموظفين",
+    "تحليلات القوى العاملة",
 ]
 
 ENTRY_LEVEL_KEYWORDS = [
@@ -30,14 +45,142 @@ ENTRY_LEVEL_KEYWORDS = [
     "coop",
     "intern",
     "trainee",
+    "0-1",
+    "0-2",
+    "0-3",
     "حديث تخرج",
     "خريج",
     "تمهير",
     "تدريب",
 ]
 
+DATA_CONTEXT_KEYWORDS = [
+    "data",
+    "analytics",
+    "analysis",
+    "bi",
+    "business intelligence",
+    "reporting",
+    "dashboard",
+    "power bi",
+    "sql",
+    "excel",
+    "insights",
+    "metrics",
+    "kpi",
+    "visualization",
+    "تحليل",
+    "بيانات",
+    "تقارير",
+    "لوحات",
+    "مؤشرات",
+]
+
+JOB_URL_HINTS = [
+    "/job",
+    "/jobs",
+    "/career",
+    "/careers",
+    "/position",
+    "/positions",
+    "/opening",
+    "/openings",
+    "/vacancy",
+    "/vacancies",
+    "careers.",
+    "jobs.",
+    "greenhouse.io",
+    "lever.co",
+    "ashbyhq.com",
+    "workdayjobs.com",
+    "oraclecloud.com",
+    "successfactors",
+    "smartrecruiters.com",
+    "bamboohr.com",
+    "jobvite.com",
+]
+
+STRONG_JOB_URL_HINTS = [
+    "/job/",
+    "/jobs/",
+    "careers.stc.com.sa/job",
+    "greenhouse.io",
+    "lever.co",
+    "ashbyhq.com",
+    "workdayjobs.com",
+    "oraclecloud.com",
+    "successfactors",
+    "smartrecruiters.com",
+]
+
+BLOCKED_URL_HINTS = [
+    "/personal/",
+    "/business/connect/",
+    "/mobile/",
+    "/international-calls",
+    "/internet",
+    "/voice",
+    "/packages",
+    "/plans",
+    "/shop",
+    "/store",
+    "/support",
+    "/help",
+    "/contact",
+    "/news",
+    "/blog",
+    "/media",
+    "/privacy",
+    "/terms",
+    "/about",
+    "/investor",
+    "tel:",
+    "mailto:",
+    "whatsapp",
+    "facebook",
+    "instagram",
+    "twitter",
+    "x.com",
+    "youtube",
+]
+
+BLOCKED_TEXT_HINTS = [
+    "international calls",
+    "quicknet",
+    "mobile data",
+    "package",
+    "packages",
+    "plan",
+    "plans",
+    "internet",
+    "voice",
+    "support",
+    "contact us",
+    "about us",
+    "privacy",
+    "terms",
+    "media center",
+    "المساعدة",
+    "اتصل بنا",
+    "الباقات",
+    "الإنترنت",
+]
+
+SENIOR_KEYWORDS = [
+    "senior",
+    "lead",
+    "manager",
+    "director",
+    "principal",
+    "5+",
+    "7+",
+    "10+",
+    "مدير",
+    "رئيس",
+]
+
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.4"
+    "User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.6"
 }
 
 
@@ -52,19 +195,28 @@ def contains_any(text: str, keywords: list[str]) -> bool:
 
 def is_valid_job_url(url: str) -> bool:
     parsed = urlparse(url)
+
     if parsed.scheme not in ["http", "https"]:
         return False
 
-    blocked = ["tel:", "mailto:", "whatsapp", "facebook", "instagram", "twitter", "x.com"]
-    return not any(term in url.lower() for term in blocked)
+    normalized_url = url.lower()
+
+    if contains_any(normalized_url, BLOCKED_URL_HINTS):
+        return False
+
+    return contains_any(normalized_url, JOB_URL_HINTS)
 
 
 def is_noise_text(text: str) -> bool:
     cleaned = re.sub(r"[\s\-\+\(\)]", "", text)
+
     if cleaned.isdigit():
         return True
 
     if len(text.strip()) < 4:
+        return True
+
+    if contains_any(text, BLOCKED_TEXT_HINTS):
         return True
 
     return False
@@ -72,9 +224,37 @@ def is_noise_text(text: str) -> bool:
 
 def build_company_label(target: dict) -> str:
     arabic_label = target.get("arabic_label") or target.get("arabic_description")
+
     if arabic_label:
         return f'{target["company"]} ({arabic_label})'
+
     return target["company"]
+
+
+def classify_link(text: str, url: str) -> str | None:
+    combined = f"{text} {url}".lower()
+
+    if contains_any(combined, BLOCKED_TEXT_HINTS):
+        return None
+
+    if contains_any(combined, SENIOR_KEYWORDS):
+        return None
+
+    has_job_title = contains_any(combined, JOB_TITLE_KEYWORDS)
+    has_entry_signal = contains_any(combined, ENTRY_LEVEL_KEYWORDS)
+    has_data_context = contains_any(combined, DATA_CONTEXT_KEYWORDS)
+    has_strong_job_url = contains_any(combined, STRONG_JOB_URL_HINTS)
+
+    if has_job_title and (has_data_context or has_strong_job_url):
+        return "apply_now"
+
+    if has_entry_signal and has_data_context and has_strong_job_url:
+        return "apply_now"
+
+    if has_job_title and has_strong_job_url:
+        return "apply_now"
+
+    return None
 
 
 def extract_job_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
@@ -95,21 +275,14 @@ def extract_job_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
         if is_noise_text(text):
             continue
 
-        combined = f"{text} {full_url}"
+        signal_type = classify_link(text, full_url)
 
-        has_job_title = contains_any(combined, JOB_TITLE_KEYWORDS)
-        has_entry_signal = contains_any(combined, ENTRY_LEVEL_KEYWORDS)
-        has_data_context = contains_any(
-            combined,
-            ["data", "analytics", "bi", "reporting", "power bi", "تحليل", "بيانات", "تقارير"],
-        )
-
-        if has_job_title or (has_entry_signal and has_data_context):
+        if signal_type:
             job_links.append(
                 {
                     "title": text,
                     "url": full_url,
-                    "signal_type": "apply_now" if has_job_title else "monitor_signal",
+                    "signal_type": signal_type,
                 }
             )
 
@@ -155,42 +328,26 @@ def scan_company_page(target: dict) -> list[dict]:
     opportunities = []
 
     for job in job_links:
-        if job["signal_type"] == "apply_now":
-            opportunities.append(
-                {
-                    "title": job["title"],
-                    "company": company_label,
-                    "location": "Saudi Arabia",
-                    "description": (
-                        "تم العثور على رابط شاغر أو برنامج قريب من مسار تحليل البيانات. "
-                        "راجع المتطلبات ثم قدّم إذا كانت مناسبة."
-                    ),
-                    "url": job["url"],
-                    "source": "Company career page scanner",
-                    "category": "🟢 قدّم الآن",
-                    "is_real_job": True,
-                }
-            )
-        else:
-            opportunities.append(
-                {
-                    "title": job["title"],
-                    "company": company_label,
-                    "location": "Saudi Arabia",
-                    "description": (
-                        "إشارة محتملة من صفحة التوظيف، لكنها تحتاج مراجعة قبل اعتبارها فرصة تقديم."
-                    ),
-                    "url": job["url"],
-                    "source": "Company career page scanner",
-                    "category": "🟡 إشارة مبكرة / راقب",
-                    "is_real_job": False,
-                }
-            )
+        opportunities.append(
+            {
+                "title": job["title"],
+                "company": company_label,
+                "location": "Saudi Arabia",
+                "description": (
+                    "تم العثور على رابط شاغر رسمي أو مسمى قريب من تحليل البيانات/التحليلات. "
+                    "راجع المتطلبات ثم قدّم إذا كانت مناسبة."
+                ),
+                "url": job["url"],
+                "source": "Company career page scanner",
+                "category": "🟢 قدّم الآن",
+                "is_real_job": True,
+            }
+        )
 
     return opportunities
 
 
-def scan_company_career_pages(limit: int = 8) -> list[dict]:
+def scan_company_career_pages(limit: int = 12) -> list[dict]:
     opportunities = []
 
     targets = [
