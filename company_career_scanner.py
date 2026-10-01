@@ -10,6 +10,7 @@ from company_career_links import COMPANY_CAREER_TARGETS
 JOB_TITLE_KEYWORDS = [
     "data analyst",
     "junior data analyst",
+    "graduate data analyst",
     "business data analyst",
     "bi analyst",
     "business intelligence analyst",
@@ -27,6 +28,7 @@ JOB_TITLE_KEYWORDS = [
     "insights analyst",
     "business analyst",
     "operations analyst",
+    "commercial analyst",
     "محلل بيانات",
     "محلل ذكاء أعمال",
     "محلل تقارير",
@@ -44,6 +46,7 @@ ENTRY_LEVEL_KEYWORDS = [
     "tamheer",
     "coop",
     "intern",
+    "internship",
     "trainee",
     "0-1",
     "0-2",
@@ -52,6 +55,7 @@ ENTRY_LEVEL_KEYWORDS = [
     "خريج",
     "تمهير",
     "تدريب",
+    "متدرب",
 ]
 
 DATA_CONTEXT_KEYWORDS = [
@@ -76,19 +80,13 @@ DATA_CONTEXT_KEYWORDS = [
     "مؤشرات",
 ]
 
-JOB_URL_HINTS = [
-    "/job",
-    "/jobs",
-    "/career",
-    "/careers",
-    "/position",
-    "/positions",
-    "/opening",
-    "/openings",
-    "/vacancy",
-    "/vacancies",
-    "careers.",
-    "jobs.",
+STRONG_JOB_URL_HINTS = [
+    "/job/",
+    "/jobs/",
+    "/jobdetails",
+    "/job-detail",
+    "/jobsearch",
+    "careers.stc.com.sa/job",
     "greenhouse.io",
     "lever.co",
     "ashbyhq.com",
@@ -100,17 +98,17 @@ JOB_URL_HINTS = [
     "jobvite.com",
 ]
 
-STRONG_JOB_URL_HINTS = [
-    "/job/",
-    "/jobs/",
-    "careers.stc.com.sa/job",
-    "greenhouse.io",
-    "lever.co",
-    "ashbyhq.com",
-    "workdayjobs.com",
-    "oraclecloud.com",
-    "successfactors",
-    "smartrecruiters.com",
+WEAK_JOB_URL_HINTS = [
+    "/career",
+    "/careers",
+    "/position",
+    "/positions",
+    "/opening",
+    "/openings",
+    "/vacancy",
+    "/vacancies",
+    "careers.",
+    "jobs.",
 ]
 
 BLOCKED_URL_HINTS = [
@@ -134,6 +132,8 @@ BLOCKED_URL_HINTS = [
     "/terms",
     "/about",
     "/investor",
+    "/products",
+    "/services",
     "tel:",
     "mailto:",
     "whatsapp",
@@ -160,10 +160,15 @@ BLOCKED_TEXT_HINTS = [
     "privacy",
     "terms",
     "media center",
+    "investor relations",
+    "product",
+    "service",
     "المساعدة",
     "اتصل بنا",
     "الباقات",
     "الإنترنت",
+    "الخدمات",
+    "المنتجات",
 ]
 
 SENIOR_KEYWORDS = [
@@ -172,6 +177,7 @@ SENIOR_KEYWORDS = [
     "manager",
     "director",
     "principal",
+    "head of",
     "5+",
     "7+",
     "10+",
@@ -180,7 +186,7 @@ SENIOR_KEYWORDS = [
 ]
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.6"
+    "User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.7"
 }
 
 
@@ -193,7 +199,7 @@ def contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword.lower() in text for keyword in keywords)
 
 
-def is_valid_job_url(url: str) -> bool:
+def is_valid_url(url: str) -> bool:
     parsed = urlparse(url)
 
     if parsed.scheme not in ["http", "https"]:
@@ -204,7 +210,7 @@ def is_valid_job_url(url: str) -> bool:
     if contains_any(normalized_url, BLOCKED_URL_HINTS):
         return False
 
-    return contains_any(normalized_url, JOB_URL_HINTS)
+    return True
 
 
 def is_noise_text(text: str) -> bool:
@@ -231,6 +237,14 @@ def build_company_label(target: dict) -> str:
     return target["company"]
 
 
+def looks_like_job_url(url: str) -> bool:
+    normalized_url = url.lower()
+    return contains_any(normalized_url, STRONG_JOB_URL_HINTS) or contains_any(
+        normalized_url,
+        WEAK_JOB_URL_HINTS,
+    )
+
+
 def classify_link(text: str, url: str) -> str | None:
     combined = f"{text} {url}".lower()
 
@@ -244,14 +258,15 @@ def classify_link(text: str, url: str) -> str | None:
     has_entry_signal = contains_any(combined, ENTRY_LEVEL_KEYWORDS)
     has_data_context = contains_any(combined, DATA_CONTEXT_KEYWORDS)
     has_strong_job_url = contains_any(combined, STRONG_JOB_URL_HINTS)
+    has_any_job_url = looks_like_job_url(url)
 
-    if has_job_title and (has_data_context or has_strong_job_url):
-        return "apply_now"
-
-    if has_entry_signal and has_data_context and has_strong_job_url:
+    if has_job_title and has_data_context and has_any_job_url:
         return "apply_now"
 
     if has_job_title and has_strong_job_url:
+        return "apply_now"
+
+    if has_entry_signal and has_data_context and has_strong_job_url:
         return "apply_now"
 
     return None
@@ -269,7 +284,7 @@ def extract_job_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
 
         full_url = urljoin(base_url, href)
 
-        if not is_valid_job_url(full_url):
+        if not is_valid_url(full_url):
             continue
 
         if is_noise_text(text):
