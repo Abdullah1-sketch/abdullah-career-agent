@@ -5,6 +5,7 @@ from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
 from manual_visit_strategy import build_manual_visit_radar
 from application_tracker import build_application_tracking_note
+from job_search_engine import search_market_opportunities, build_search_engine_status
 
 
 TITLE_TRANSLATIONS = {
@@ -50,29 +51,6 @@ BLOCKED_REPORT_TERMS = [
     "الإنترنت",
     "الخدمات",
     "اتصل بنا",
-]
-
-DAILY_ACTIONS = [
-    {
-        "title": "قو SQL اليوم",
-        "reason": "SQL أكثر مهارة ترفع فرصك في وظائف Data Analyst وBI Analyst.",
-        "task": "ذاكر 45 دقيقة: SELECT + WHERE + ORDER BY، ثم طبّق 10 استعلامات بسيطة.",
-    },
-    {
-        "title": "جهز رسالة LinkedIn قصيرة",
-        "reason": "التقديم الرسمي وحده ما يكفي دائمًا، الرسالة المختصرة تزيد فرصة الانتباه لك.",
-        "task": "اكتب رسالة من 3 أسطر: من أنت، أقرب مشروع للشركة، ونوع الفرصة اللي تبحث عنها.",
-    },
-    {
-        "title": "راجع مشروع SAMA POS",
-        "reason": "هذا أقوى مشروع لك للبنوك والفنتك والشركات الحكومية.",
-        "task": "اكتب 3 نقاط: مصدر البيانات، أهم المؤشرات، وش اكتشفت.",
-    },
-    {
-        "title": "راجع مشروع Excel",
-        "reason": "مشروع الفروع والربحية مناسب لشركات التشغيل والمطاعم والتوصيل.",
-        "task": "اكتب 3 نقاط: المشكلة، التحليل، النتيجة.",
-    },
 ]
 
 
@@ -275,10 +253,11 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 
 
 def get_current_opportunities() -> list[dict]:
+    market = search_market_opportunities(limit_per_query=5)
     scanned = scan_company_career_pages(limit=12)
     manual = get_manual_opportunities()
-    all_items = scanned + manual
 
+    all_items = market + scanned + manual
     unique_items = {}
 
     for item in all_items:
@@ -325,20 +304,12 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
 
 
 def build_daily_action_brief() -> str:
-    action = DAILY_ACTIONS[0]
+    return f"""لا توجد فرصة قوية جديدة تستحق التقديم اليوم.
 
-    return f"""وش تسوي اليوم؟
+{build_search_engine_status()}
 
-لا توجد فرصة قوية جديدة تستحق التقديم.
-
-أقوى حركة اليوم:
-{action["title"]}
-
-ليش؟
-{action["reason"]}
-
-المهمة:
-{action["task"]}"""
+قرار اليوم:
+لا تضيع وقتك على تقديم ضعيف. ننتظر فرصة قوية أو نبحث يدويًا عن فرصة محددة."""
 
 
 def build_daily_radar_message() -> str:
