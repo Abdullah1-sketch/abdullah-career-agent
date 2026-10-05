@@ -71,23 +71,6 @@ DATA_CONTEXT_TERMS = [
     "إحصاء",
 ]
 
-ENTRY_TERMS = [
-    "junior",
-    "entry level",
-    "fresh graduate",
-    "graduate",
-    "tamheer",
-    "intern",
-    "trainee",
-    "0-1",
-    "0-2",
-    "0-3",
-    "حديث تخرج",
-    "خريج",
-    "تمهير",
-    "تدريب",
-]
-
 LOCATION_TERMS = [
     "riyadh",
     "الرياض",
@@ -113,6 +96,55 @@ BAD_TERMS = [
     "data engineer",
     "data scientist",
     "machine learning engineer",
+]
+
+STALE_TERMS = [
+    "posted 2 years ago",
+    "posted 1 year ago",
+    "posted a year ago",
+    "2 years ago",
+    "1 year ago",
+    "a year ago",
+    "years ago",
+    "year ago",
+    "months ago",
+    "closed",
+    "expired",
+    "no longer accepting applications",
+    "لم يعد التقديم متاح",
+    "انتهى التقديم",
+]
+
+PROCESS_ONLY_TERMS = [
+    "business process documentation",
+    "process documentation",
+    "workflow diagrams",
+    "business process mapping",
+    "process mapping",
+    "as-is",
+    "to-be",
+    "visio",
+    "mega",
+    "manuals",
+]
+
+STRONG_ANALYTICS_TERMS = [
+    "data analyst",
+    "bi analyst",
+    "business intelligence",
+    "reporting analyst",
+    "analytics analyst",
+    "hr analytics",
+    "dashboard",
+    "dashboards",
+    "power bi",
+    "sql",
+    "kpi",
+    "metrics",
+    "data visualization",
+    "محلل بيانات",
+    "ذكاء الأعمال",
+    "تقارير",
 ]
 
 GENERIC_TITLE_TERMS = [
@@ -159,7 +191,6 @@ DIRECT_JOB_URL_HINTS = [
     "sabbar.com",
     "careers.stc.com.sa",
 ]
-
 
 COMPANY_LABELS = {
     "stc": "stc (إس تي سي – اتصالات وتقنية)",
@@ -215,6 +246,36 @@ def is_generic_search_result(title: str, url: str) -> bool:
     return False
 
 
+def is_stale_result(text: str) -> bool:
+    return contains_any(text, STALE_TERMS)
+
+
+def is_process_only_business_role(title: str, text: str) -> bool:
+    title_lower = title.lower()
+
+    if "business analyst" not in title_lower:
+        return False
+
+    has_process_only_terms = contains_any(text, PROCESS_ONLY_TERMS)
+    has_strong_analytics_terms = contains_any(text, STRONG_ANALYTICS_TERMS)
+
+    return has_process_only_terms and not has_strong_analytics_terms
+
+
+def fetch_page_text(url: str) -> str:
+    try:
+        response = requests.get(
+            url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.8"},
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return ""
+
+    return clean_text(response.text[:6000]).lower()
+
+
 def extract_company(title: str, url: str, snippet: str) -> str:
     text = f"{title} {snippet}".lower()
     domain = urlparse(url).netloc.lower().replace("www.", "")
@@ -259,6 +320,9 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
     if is_generic_search_result(title, url):
         return False
 
+    if is_stale_result(combined):
+        return False
+
     if contains_any(combined, BAD_TERMS):
         return False
 
@@ -273,6 +337,15 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
         return False
 
     if not has_location:
+        return False
+
+    page_text = fetch_page_text(url)
+    full_text = f"{combined} {page_text}"
+
+    if is_stale_result(full_text):
+        return False
+
+    if is_process_only_business_role(title, full_text):
         return False
 
     return True
@@ -300,6 +373,7 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         "hl": "en",
         "gl": "sa",
         "num": limit,
+        "tbs": "qdr:m",
     }
 
     try:
@@ -367,9 +441,6 @@ def search_market_opportunities(limit: int = 8) -> list[dict]:
 
 def build_search_engine_status() -> str:
     if os.getenv("SERPAPI_KEY"):
-        return (
-            "محرك البحث مفعّل: SerpApi.\n"
-            "إذا لم تظهر فرصة قوية، فهذا يعني أن الفلتر لم يجد إعلانًا مباشرًا مناسبًا اليوم."
-        )
+        return "محرك البحث مفعّل: SerpApi."
 
     return "محرك البحث غير مفعّل: أضف SERPAPI_KEY في GitHub Secrets."
