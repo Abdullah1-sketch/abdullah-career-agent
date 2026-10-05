@@ -8,13 +8,20 @@ import requests
 SERPAPI_URL = "https://serpapi.com/search.json"
 
 
-TARGET_QUERIES = [
-    '("Data Analyst" OR "Junior Data Analyst") ("Riyadh" OR "Saudi Arabia") ("0-2" OR "0-3" OR junior OR graduate OR Tamheer)',
-    '("BI Analyst" OR "Business Intelligence Analyst" OR "Reporting Analyst") ("Riyadh" OR "Saudi Arabia") (junior OR graduate OR "0-2" OR "0-3")',
-    '("HR Analytics Analyst" OR "People Analytics Analyst" OR "Workforce Analytics Analyst") ("Riyadh" OR "Saudi Arabia")',
-    '("Business Data Analyst" OR "Analytics Analyst" OR "Insights Analyst") ("Riyadh" OR "Saudi Arabia") (junior OR graduate OR "0-2" OR "0-3")',
-    '("محلل بيانات" OR "محلل ذكاء أعمال" OR "محلل تقارير") ("الرياض" OR "السعودية")',
-    '("تمهير" OR "برنامج خريجين") ("تحليل بيانات" OR "ذكاء أعمال" OR "Power BI" OR "SQL")',
+SEARCH_QUERIES = [
+    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Data Analyst\" \"0-2\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Junior Data Analyst\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"BI Analyst\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Reporting Analyst\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"HR Analytics Analyst\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Business Analyst\" \"Power BI\"",
+    "site:sabbar.com Saudi Arabia Riyadh \"Data Analyst\" fresh graduate",
+    "site:sabbar.com Saudi Arabia Riyadh \"محلل بيانات\"",
+    "site:careers.stc.com.sa Riyadh analytics analyst",
+    "site:careers.stc.com.sa Riyadh data analyst",
+    "site:jobs.lever.co Saudi Arabia Riyadh data analyst",
+    "site:boards.greenhouse.io Saudi Arabia Riyadh data analyst",
+    "site:jobs.ashbyhq.com Saudi Arabia Riyadh data analyst",
 ]
 
 TARGET_TITLE_TERMS = [
@@ -24,20 +31,46 @@ TARGET_TITLE_TERMS = [
     "bi analyst",
     "business intelligence analyst",
     "reporting analyst",
-    "analytics analyst",
     "hr analytics analyst",
-    "people analytics",
-    "workforce analytics",
+    "people analytics analyst",
+    "workforce analytics analyst",
+    "analytics analyst",
     "insights analyst",
+    "business analyst",
+    "operations analyst",
     "محلل بيانات",
     "محلل ذكاء أعمال",
     "محلل تقارير",
+    "محلل تحليلات",
 ]
 
-ENTRY_LEVEL_TERMS = [
+DATA_CONTEXT_TERMS = [
+    "data",
+    "analytics",
+    "analysis",
+    "business intelligence",
+    "bi",
+    "reporting",
+    "dashboard",
+    "power bi",
+    "sql",
+    "excel",
+    "kpi",
+    "metrics",
+    "insights",
+    "visualization",
+    "تحليل",
+    "بيانات",
+    "تقارير",
+    "لوحات",
+    "مؤشرات",
+]
+
+ENTRY_TERMS = [
     "junior",
-    "graduate",
+    "entry level",
     "fresh graduate",
+    "graduate",
     "tamheer",
     "intern",
     "trainee",
@@ -50,33 +83,14 @@ ENTRY_LEVEL_TERMS = [
     "تدريب",
 ]
 
-GOOD_SKILL_TERMS = [
-    "excel",
-    "power bi",
-    "sql",
-    "dashboard",
-    "reporting",
-    "analytics",
-    "analysis",
-    "business intelligence",
-    "kpi",
-    "metrics",
-    "تحليل",
-    "تقارير",
-    "لوحات",
-    "مؤشرات",
-]
-
-TARGET_LOCATIONS = [
+LOCATION_TERMS = [
     "riyadh",
     "الرياض",
     "qassim",
     "القصيم",
-    "dammam",
-    "khobar",
-    "eastern",
-    "السعودية",
     "saudi arabia",
+    "ksa",
+    "السعودية",
 ]
 
 BAD_TERMS = [
@@ -85,53 +99,68 @@ BAD_TERMS = [
     "manager",
     "director",
     "principal",
+    "head of",
     "5+",
+    "6+",
     "7+",
+    "8+",
     "10+",
     "data engineer",
     "data scientist",
     "machine learning engineer",
-    "مدير",
-    "رئيس",
-    "خبير",
 ]
 
-BAD_URL_TERMS = [
-    "/blog",
-    "/news",
-    "/media",
-    "/about",
-    "/privacy",
-    "/terms",
-    "/support",
-    "/contact",
-    "/products",
-    "/services",
-    "facebook.com",
-    "instagram.com",
-    "youtube.com",
+GENERIC_TITLE_TERMS = [
+    "jobs in",
+    "job in",
+    "job vacancies",
+    "job openings",
+    "no experience jobs",
+    "analyst jobs",
+    "data analyst jobs",
+    "وظائف",
+    "فرص عمل",
 ]
 
-PREFERRED_DOMAINS = [
-    "linkedin.com/jobs",
-    "careers.",
-    "jobs.",
+BLOCKED_DOMAINS = [
+    "jooble.org",
+    "indeed.com",
+    "bayt.com",
+    "naukrigulf.com",
+    "glassdoor.com",
+]
+
+BLOCKED_URL_PARTS = [
+    "/jobs/search",
+    "/jobs?q=",
+    "/job-search",
+    "/search",
+    "/salary",
+    "/career-advice",
+    "/companies",
+]
+
+DIRECT_JOB_URL_HINTS = [
+    "/jobs/view/",
+    "/job/",
+    "/jobs/",
     "greenhouse.io",
     "lever.co",
     "ashbyhq.com",
     "workdayjobs.com",
     "oraclecloud.com",
     "successfactors",
-    "smartrecruiters.com",
-    "myworkdayjobs.com",
-    "bayt.com",
-    "indeed.com",
-    "sa.indeed.com",
+    "smartrecruiters",
+    "sabbar.com",
+    "careers.stc.com.sa",
 ]
 
 
-def clean_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()
+COMPANY_LABELS = {
+    "stc": "stc (إس تي سي – اتصالات وتقنية)",
+    "sabbar": "Sabbar (صبار – منصة توظيف)",
+    "linkedin": "LinkedIn (لينكدإن – منصة وظائف وتواصل مهني)",
+}
 
 
 def contains_any(text: str, terms: list[str]) -> bool:
@@ -139,98 +168,121 @@ def contains_any(text: str, terms: list[str]) -> bool:
     return any(term.lower() in text for term in terms)
 
 
-def get_domain(url: str) -> str:
-    try:
-        return urlparse(url).netloc.lower()
-    except ValueError:
-        return ""
+def clean_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
 
 
-def is_bad_result(title: str, snippet: str, url: str) -> bool:
-    combined = f"{title} {snippet} {url}".lower()
+def normalize_url(url: str) -> str:
+    return (url or "").split("?")[0].rstrip("/")
 
-    if contains_any(combined, BAD_TERMS):
+
+def is_blocked_domain(url: str) -> bool:
+    domain = urlparse(url).netloc.lower().replace("www.", "")
+    return any(blocked in domain for blocked in BLOCKED_DOMAINS)
+
+
+def is_direct_job_url(url: str) -> bool:
+    lower_url = url.lower()
+
+    if is_blocked_domain(lower_url):
+        return False
+
+    if contains_any(lower_url, BLOCKED_URL_PARTS):
+        if "/jobs/view/" not in lower_url:
+            return False
+
+    return contains_any(lower_url, DIRECT_JOB_URL_HINTS)
+
+
+def is_generic_search_result(title: str, url: str) -> bool:
+    title_lower = title.lower()
+    url_lower = url.lower()
+
+    if contains_any(title_lower, GENERIC_TITLE_TERMS):
         return True
 
-    if contains_any(url.lower(), BAD_URL_TERMS):
+    if re.search(r"\b\d{2,5}\s+.*jobs\b", title_lower):
+        return True
+
+    if "linkedin.com/jobs/" in url_lower and "/jobs/view/" not in url_lower:
         return True
 
     return False
 
 
-def looks_like_job_source(url: str) -> bool:
-    url = url.lower()
-    return contains_any(url, PREFERRED_DOMAINS)
+def extract_company(title: str, url: str, snippet: str) -> str:
+    text = f"{title} {snippet}".lower()
+    domain = urlparse(url).netloc.lower().replace("www.", "")
+
+    if "stc" in text or "careers.stc.com.sa" in domain:
+        return COMPANY_LABELS["stc"]
+
+    if "sabbar.com" in domain:
+        return COMPANY_LABELS["sabbar"]
+
+    if "linkedin.com" in domain:
+        return COMPANY_LABELS["linkedin"]
+
+    parts = domain.split(".")
+    if parts:
+        return parts[0]
+
+    return "غير معروف"
 
 
-def score_search_result(title: str, snippet: str, url: str) -> int:
-    combined = f"{title} {snippet} {url}".lower()
-
-    score = 0
-
-    if contains_any(combined, TARGET_TITLE_TERMS):
-        score += 40
-
-    if contains_any(combined, ENTRY_LEVEL_TERMS):
-        score += 20
-
-    if contains_any(combined, GOOD_SKILL_TERMS):
-        score += 20
-
-    if contains_any(combined, TARGET_LOCATIONS):
-        score += 15
-
-    if looks_like_job_source(url):
-        score += 15
-
-    if contains_any(combined, BAD_TERMS):
-        score -= 40
-
-    return max(0, min(score, 100))
-
-
-def infer_location(text: str) -> str:
-    text = text.lower()
+def estimate_location(title: str, snippet: str) -> str:
+    text = f"{title} {snippet}".lower()
 
     if "riyadh" in text or "الرياض" in text:
         return "الرياض"
     if "qassim" in text or "القصيم" in text:
         return "القصيم"
-    if any(word in text for word in ["dammam", "khobar", "eastern", "الدمام", "الخبر", "الشرقية"]):
+    if "dammam" in text or "khobar" in text or "eastern" in text or "الشرقية" in text:
         return "الشرقية"
-    if "saudi" in text or "السعودية" in text:
+    if "saudi" in text or "ksa" in text or "السعودية" in text:
         return "السعودية"
 
     return "غير مذكورة"
 
 
-def infer_company(title: str, snippet: str, url: str) -> str:
-    domain = get_domain(url)
+def is_good_result(title: str, snippet: str, url: str) -> bool:
+    combined = f"{title} {snippet} {url}".lower()
 
-    known_companies = {
-        "stc": "stc (إس تي سي – اتصالات وتقنية)",
-        "elm": "Elm (علم – حلول رقمية حكومية)",
-        "tamara": "Tamara (تمارا – تقنية مالية)",
-        "tabby": "Tabby (تابي – تقنية مالية)",
-        "foodics": "Foodics (فودكس – تقنية المطاعم ونقاط البيع)",
-        "tahakom": "Tahakom (تحكم – حلول المدن الذكية والسلامة المرورية)",
-        "sdaia": "SDAIA (سدايا – البيانات والذكاء الاصطناعي)",
-        "moz": "Mozn (مزن – ذكاء اصطناعي ومخاطر مالية)",
-    }
+    if not is_direct_job_url(url):
+        return False
 
-    combined = f"{title} {snippet} {domain}".lower()
+    if is_generic_search_result(title, url):
+        return False
 
-    for key, company in known_companies.items():
-        if key in combined:
-            return company
+    if contains_any(combined, BAD_TERMS):
+        return False
 
-    if domain:
-        return domain.replace("www.", "")
+    has_target_title = contains_any(combined, TARGET_TITLE_TERMS)
+    has_data_context = contains_any(combined, DATA_CONTEXT_TERMS)
+    has_location = contains_any(combined, LOCATION_TERMS)
 
-    return "غير مذكورة"
+    if not has_target_title:
+        return False
+
+    if not has_data_context:
+        return False
+
+    if not has_location:
+        return False
+
+    return True
 
 
-def search_serpapi(query: str, limit: int = 5) -> list[dict]:
+def build_description(title: str, snippet: str) -> str:
+    text = clean_text(f"{title}. {snippet}")
+
+    if not text:
+        return "إعلان وظيفة محتمل في مجال تحليل البيانات."
+
+    return text[:900]
+
+
+def serpapi_search(query: str, limit: int = 5) -> list[dict]:
     api_key = os.getenv("SERPAPI_KEY")
 
     if not api_key:
@@ -239,80 +291,82 @@ def search_serpapi(query: str, limit: int = 5) -> list[dict]:
     params = {
         "engine": "google",
         "q": query,
+        "api_key": api_key,
         "hl": "en",
         "gl": "sa",
         "num": limit,
-        "api_key": api_key,
     }
 
     try:
-        response = requests.get(SERPAPI_URL, params=params, timeout=30)
+        response = requests.get(SERPAPI_URL, params=params, timeout=25)
         response.raise_for_status()
-        data = response.json()
     except requests.RequestException:
         return []
 
+    data = response.json()
     results = []
 
-    for result in data.get("organic_results", []):
-        title = clean_text(result.get("title", ""))
-        snippet = clean_text(result.get("snippet", ""))
-        url = result.get("link", "")
+    for item in data.get("organic_results", []):
+        title = clean_text(item.get("title", ""))
+        snippet = clean_text(item.get("snippet", ""))
+        url = item.get("link", "")
 
         if not title or not url:
             continue
 
-        if is_bad_result(title, snippet, url):
+        if not is_good_result(title, snippet, url):
             continue
 
-        score = score_search_result(title, snippet, url)
-
-        if score < 65:
-            continue
-
-        combined = f"{title} {snippet}"
+        company = extract_company(title, url, snippet)
+        location = estimate_location(title, snippet)
 
         results.append(
             {
                 "title": title,
-                "company": infer_company(title, snippet, url),
-                "location": infer_location(combined),
-                "description": snippet or "فرصة ظهرت من بحث ويب مخصص لمسار تحليل البيانات.",
-                "url": url,
-                "source": "Web job search",
-                "category": "🟢 قدّم الآن" if score >= 75 else "🟡 راقب",
+                "company": company,
+                "location": location,
+                "description": build_description(title, snippet),
+                "url": normalize_url(url),
+                "source": "SerpApi Google Search",
+                "category": "🟢 قدّم الآن",
                 "is_real_job": True,
-                "search_score": score,
             }
         )
 
     return results
 
 
-def search_market_opportunities(limit_per_query: int = 5) -> list[dict]:
+def deduplicate(items: list[dict]) -> list[dict]:
+    unique = {}
+
+    for item in items:
+        key = normalize_url(item.get("url", "")) or f'{item.get("title", "")}-{item.get("company", "")}'
+        unique[key] = item
+
+    return list(unique.values())
+
+
+def search_market_opportunities(limit: int = 8) -> list[dict]:
     all_results = []
 
-    for query in TARGET_QUERIES:
-        all_results.extend(search_serpapi(query, limit=limit_per_query))
+    for query in SEARCH_QUERIES:
+        all_results.extend(serpapi_search(query, limit=5))
 
-    unique_results = {}
+        if len(all_results) >= limit * 2:
+            break
 
-    for item in all_results:
-        url = item.get("url", "")
-        if not url:
-            continue
-        unique_results[url] = item
+    unique_results = deduplicate(all_results)
 
-    sorted_results = sorted(
-        unique_results.values(),
-        key=lambda item: item.get("search_score", 0),
-        reverse=True,
-    )
-
-    return sorted_results[:8]
+    return unique_results[:limit]
 
 
 def build_search_engine_status() -> str:
     if os.getenv("SERPAPI_KEY"):
-        return "محرك البحث مفعّل."
-    return "محرك البحث غير مفعّل: أضف SERPAPI_KEY في GitHub Secrets."
+        return (
+            "محرك البحث مفعّل: SerpApi.\n"
+            "إذا لم تظهر فرصة قوية، فهذا يعني أن الفلتر لم يجد إعلانًا مباشرًا مناسبًا اليوم."
+        )
+
+    return (
+        "محرك البحث غير مفعّل: أضف SERPAPI_KEY في GitHub Secrets."
+    )
