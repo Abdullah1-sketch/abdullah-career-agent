@@ -3,8 +3,7 @@ from interview_path import recommend_interview_path
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
-from manual_visit_strategy import build_manual_visit_radar
-from job_search_engine import search_market_opportunities, build_search_engine_status
+from job_search_engine import search_market_opportunities
 
 
 TITLE_TRANSLATIONS = {
@@ -126,31 +125,31 @@ def translate_job_title(title: str) -> str:
 
 def translate_reason(reason: str) -> str:
     return {
-        "Relevant data-analysis title": "المسمى قريب من تحليل البيانات أو التحليلات",
-        "Matches Abdullah's current skills or entry-level path": "يناسب مهاراتك الحالية أو مسار المبتدئين",
-        "Matches Abdullah's entry-level path": "مناسب لمسار مبتدئ / حديث تخرج / تمهير",
-        "Matches Abdullah's current skills": "يناسب مهاراتك الحالية: Excel وPower BI والتقارير",
+        "Relevant data-analysis title": "مسمى مناسب لمسارك",
+        "Matches Abdullah's current skills or entry-level path": "يناسب مهاراتك أو مسار مبتدئ",
+        "Matches Abdullah's entry-level path": "مناسب لمبتدئ / حديث تخرج / تمهير",
+        "Matches Abdullah's current skills": "يناسب Excel وPower BI والتقارير",
         "Matches Abdullah's SQL learning path": "SQL مطلوب أو مفيد",
-        "Location fits Riyadh priority": "الموقع ممتاز لأنه في الرياض",
-        "Location fits Eastern Province priority": "الموقع يناسب الشرقية",
-        "Location fits Qassim priority": "الموقع يناسب القصيم",
-        "Location fits Saudi Arabia preferences": "الموقع داخل السعودية",
-        "Remote option may fit": "الخيار عن بعد وقد يناسبك",
+        "Location fits Riyadh priority": "الموقع ممتاز: الرياض",
+        "Location fits Eastern Province priority": "الموقع مناسب: الشرقية",
+        "Location fits Qassim priority": "الموقع مناسب: القصيم",
+        "Location fits Saudi Arabia preferences": "داخل السعودية",
+        "Remote option may fit": "عن بعد وقد يناسبك",
         "Has a skill gap Abdullah can prepare for": "فيه مهارة تحتاج تجهيز",
-        "Has a clearer path to interview or outreach": "يوجد رابط أو مسار تقديم واضح",
-        "May be too senior or outside target path": "قد تكون أعلى من مستواك الحالي",
-        "Not enough job details to confirm fit": "التفاصيل غير كافية لتأكيد التوافق",
+        "Has a clearer path to interview or outreach": "مسار التقديم واضح",
+        "May be too senior or outside target path": "قد تكون أعلى من مستواك",
+        "Not enough job details to confirm fit": "التفاصيل غير كافية",
     }.get(reason, reason)
 
 
 def translate_action(action: str) -> str:
     return {
-        "Apply officially as soon as possible": "قدّم رسميًا اليوم",
-        "Prepare a personalized LinkedIn message": "بعد التقديم أرسل رسالة LinkedIn قصيرة",
-        "Consider a small company-relevant portfolio angle": "اربط التقديم بمشروع مناسب من أعمالك",
+        "Apply officially as soon as possible": "قدّم اليوم",
+        "Prepare a personalized LinkedIn message": "بعد التقديم أرسل رسالة قصيرة",
+        "Consider a small company-relevant portfolio angle": "اربط التقديم بمشروع من أعمالك",
         "Apply officially": "قدّم رسميًا",
-        "Keep in daily report and monitor": "راقبها فقط",
-        "Do not spend much time unless new signals appear": "لا تصرف عليها وقتًا الآن",
+        "Keep in daily report and monitor": "راقب فقط",
+        "Do not spend much time unless new signals appear": "لا تصرف وقتًا الآن",
     }.get(action, action)
 
 
@@ -213,7 +212,7 @@ def get_score(opportunity_data: dict) -> int:
 
 def get_category(opportunity_data: dict, score: int) -> str:
     if opportunity_data.get("is_real_job") is False:
-        return "⚪ شركة تحت المراقبة"
+        return "⚪ راقب"
 
     if score >= 75:
         return "🟢 قدّم الآن"
@@ -221,7 +220,7 @@ def get_category(opportunity_data: dict, score: int) -> str:
     if score >= 55:
         return "🟡 راقب"
 
-    return "⚪ شركة تحت المراقبة"
+    return "⚪ راقب"
 
 
 def build_missing_items(opportunity_data: dict) -> str:
@@ -235,31 +234,18 @@ def build_missing_items(opportunity_data: dict) -> str:
     missing = []
 
     if "sql" in text:
-        missing.append("راجع SQL قبل التقديم أو المقابلة")
+        missing.append("راجع SQL")
     if "python" in text:
         missing.append("Python قد يكون مطلوبًا")
     if contains_any(text, ["tableau", "looker"]):
-        missing.append("قد تحتاج أداة BI إضافية")
+        missing.append("قد تحتاج Tableau/Looker")
     if contains_any(text, ["statistics", "statistical", "إحصاء"]):
         missing.append("راجع أساسيات الإحصاء")
 
     if not missing:
-        return "لا يظهر نقص واضح من الوصف المتاح"
+        return "لا يظهر نقص واضح"
 
     return "، ".join(missing[:2])
-
-
-def build_strong_extra_move(opportunity_data: dict, score: int) -> str:
-    if score < 85 or opportunity_data.get("is_real_job") is False:
-        return ""
-
-    company = opportunity_data.get("company", "الشركة")
-
-    return (
-        "\nخطوة السبق:\n"
-        f"- بعد التقديم، أرسل رسالة قصيرة لمسؤول توظيف أو شخص من فريق البيانات في {company}.\n"
-        "- اربط الرسالة بمشروع مناسب من ملف أعمالك."
-    )
 
 
 def build_opportunity_section(opportunity_data: dict) -> str:
@@ -291,8 +277,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 {chr(10).join("- " + action for action in actions)}
 
 الرابط:
-{record["url"]}
-{build_strong_extra_move(opportunity_data, score)}"""
+{record["url"]}"""
 
 
 def search_market_safely() -> list[dict]:
@@ -356,12 +341,10 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
 
 
 def build_no_opportunity_message() -> str:
-    return f"""لا توجد فرصة قوية جديدة تستحق التقديم اليوم.
+    return """لا توجد فرصة قوية اليوم.
 
-{build_search_engine_status()}
-
-قرار اليوم:
-لا تقدم على فرص ضعيفة. ننتظر فرصة مباشرة أو نبحث يدويًا عن شركة محددة."""
+تم فحص المصادر بدون إعلان مباشر مناسب.
+لا تضيع وقتك على تقديم ضعيف."""
 
 
 def build_daily_radar_message() -> str:
@@ -377,23 +360,12 @@ def build_daily_radar_message() -> str:
         if get_category(opportunity, get_score(opportunity)).startswith("🟡")
     ]
 
-    sections = []
-
     if apply_now:
-        sections.append("فرص اليوم:")
+        sections = ["فرص اليوم:"]
         sections.extend(build_opportunity_section(item) for item in apply_now[:2])
+        return "\n\n".join(sections)
 
-        strongest_score = get_score(apply_now[0])
-        if strongest_score >= 85:
-            sections.append(
-                "تحرك يدوي محتمل إذا كنت بالرياض أو القصيم:\n"
-                + build_manual_visit_radar(limit=1)
-            )
-    else:
-        sections.append(build_no_opportunity_message())
+    if early_signals:
+        return "لا توجد فرصة قوية اليوم.\n\nإشارة للمراقبة فقط:\n\n" + build_opportunity_section(early_signals[0])
 
-    if early_signals and not apply_now:
-        sections.append("إشارة واحدة للمراقبة فقط:")
-        sections.append(build_opportunity_section(early_signals[0]))
-
-    return "\n\n".join(sections)
+    return build_no_opportunity_message()
