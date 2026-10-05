@@ -38,10 +38,12 @@ TARGET_TITLE_TERMS = [
     "insights analyst",
     "business analyst",
     "operations analyst",
+    "statistician",
     "محلل بيانات",
     "محلل ذكاء أعمال",
     "محلل تقارير",
     "محلل تحليلات",
+    "إحصائي",
 ]
 
 DATA_CONTEXT_TERMS = [
@@ -59,11 +61,14 @@ DATA_CONTEXT_TERMS = [
     "metrics",
     "insights",
     "visualization",
+    "statistical",
+    "statistics",
     "تحليل",
     "بيانات",
     "تقارير",
     "لوحات",
     "مؤشرات",
+    "إحصاء",
 ]
 
 ENTRY_TERMS = [
@@ -367,6 +372,4 @@ def build_search_engine_status() -> str:
             "إذا لم تظهر فرصة قوية، فهذا يعني أن الفلتر لم يجد إعلانًا مباشرًا مناسبًا اليوم."
         )
 
-    return (
-        "محرك البحث غير مفعّل: أضف SERPAPI_KEY في GitHub Secrets."
-    )
+    return "محرك البحث غير مفعّل: أضف SERPAPI_KEY في GitHub Secrets."
