@@ -93,6 +93,11 @@ BAD_TERMS = [
     "7+",
     "8+",
     "10+",
+    "minimum of three years",
+    "three years of experience",
+    "3+ years",
+    "3 years",
+    "minimum 3 years",
     "data engineer",
     "data scientist",
     "machine learning engineer",
@@ -165,6 +170,8 @@ BLOCKED_DOMAINS = [
     "bayt.com",
     "naukrigulf.com",
     "glassdoor.com",
+    "bebee.com",
+    "trabajo.org",
 ]
 
 BLOCKED_URL_PARTS = [
@@ -343,6 +350,9 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
     full_text = f"{combined} {page_text}"
 
     if is_stale_result(full_text):
+        return False
+
+    if contains_any(full_text, BAD_TERMS):
         return False
 
     if is_process_only_business_role(title, full_text):
