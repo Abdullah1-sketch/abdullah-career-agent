@@ -1,15 +1,19 @@
+"""Find jobs with SerpApi's Google Jobs engine.
+
+Google Jobs returns real postings (title, company, location, full
+description, apply links), so no web pages are scraped. Each search costs
+one SerpApi credit and returns up to 10 jobs.
+"""
+
 import os
-import re
 from collections import Counter
 from datetime import date
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import requests
-from bs4 import BeautifulSoup
 
 from config import BAD_TITLE_SIGNALS, SEARCHES_PER_RUN
 from opportunity_scoring import (
-    CLOSED_POSTING_SIGNALS,
     contains_any,
     has_high_experience,
     is_hris_heavy_role,
@@ -19,36 +23,27 @@ from opportunity_scoring import (
 
 
 SERPAPI_URL = "https://serpapi.com/search.json"
-# One SerpApi credit returns up to 10 Google results, so ask for all 10.
-RESULTS_PER_SEARCH = 10
+
+# Google Jobs searches inside Saudi Arabia; the city goes in the query.
+SEARCH_LOCATION = "Saudi Arabia"
 
 SEARCH_QUERIES = [
-    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Data Analyst\" \"0-2\"",
-    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Junior Data Analyst\"",
-    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"BI Analyst\"",
-    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Reporting Analyst\"",
-    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"HR Analytics Analyst\"",
-    "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Business Analyst\" \"Power BI\"",
-    "site:sabbar.com Saudi Arabia Riyadh \"Data Analyst\" fresh graduate",
-    "site:sabbar.com Saudi Arabia Riyadh \"محلل بيانات\"",
-    "site:careers.stc.com.sa Riyadh analytics analyst",
-    "site:careers.stc.com.sa Riyadh data analyst",
-    "site:jobs.lever.co Saudi Arabia Riyadh data analyst",
-    "site:boards.greenhouse.io Saudi Arabia Riyadh data analyst",
-    "site:jobs.ashbyhq.com Saudi Arabia Riyadh data analyst",
-    "site:*.careers-page.com Riyadh \"Data Analyst\"",
-    "site:*.careers-page.com Riyadh \"Business Intelligence\"",
-    # Eastern Province
-    "site:linkedin.com/jobs/view Dammam OR Khobar OR Dhahran \"Data Analyst\"",
-    "site:linkedin.com/jobs/view Dammam OR Khobar OR Dhahran \"BI Analyst\" OR \"Reporting Analyst\"",
-    # Qassim
-    "site:linkedin.com/jobs/view Qassim OR Buraydah OR Unaizah analyst data",
-    # Graduate programs, Tamheer and Arabic postings
-    "site:linkedin.com/jobs/view Saudi Arabia \"Graduate Development Program\" data",
-    "site:linkedin.com/jobs/view Saudi Arabia \"fresh graduate\" \"Data Analyst\"",
-    "site:linkedin.com/jobs/view Saudi Arabia Tamheer data analysis",
-    "site:linkedin.com/jobs/view السعودية \"محلل بيانات\"",
-    "site:myworkdayjobs.com Saudi Arabia \"Data Analyst\"",
+    "Data Analyst Riyadh",
+    "Junior Data Analyst Saudi Arabia",
+    "Data Analyst Dammam",
+    "Data Analyst Khobar",
+    "BI Analyst Riyadh",
+    "Power BI Analyst Saudi Arabia",
+    "Reporting Analyst Riyadh",
+    "Data Analyst Qassim Buraydah",
+    "Graduate Development Program data Saudi Arabia",
+    "Fresh graduate data analyst Saudi Arabia",
+    "محلل بيانات",
+    "Business Intelligence Analyst Eastern Province",
+    "Tamheer data analysis",
+    "Data Analyst intern Riyadh",
+    "Business Analyst Power BI Riyadh",
+    "Operations Analyst Riyadh",
 ]
 
 TARGET_TITLE_TERMS = [
@@ -108,24 +103,6 @@ DATA_CONTEXT_TERMS = [
     "إحصاء",
 ]
 
-ENTRY_LEVEL_TERMS = [
-    "junior",
-    "entry level",
-    "fresh graduate",
-    "graduate",
-    "tamheer",
-    "coop",
-    "intern",
-    "trainee",
-    "0-1",
-    "0-2",
-    "0-3",
-    "حديث تخرج",
-    "خريج",
-    "تمهير",
-    "تدريب",
-]
-
 LOCATION_TERMS = [
     "riyadh",
     "الرياض",
@@ -148,18 +125,6 @@ LOCATION_TERMS = [
     "السعودية",
 ]
 
-GENERIC_TITLE_TERMS = [
-    "jobs in",
-    "job in",
-    "job vacancies",
-    "job openings",
-    "no experience jobs",
-    "analyst jobs",
-    "data analyst jobs",
-    "وظائف",
-    "فرص عمل",
-]
-
 AGGREGATOR_DOMAINS = [
     "jooble.org",
     "indeed.com",
@@ -172,47 +137,20 @@ AGGREGATOR_DOMAINS = [
     "wzzff.com",
 ]
 
-BLOCKED_URL_PARTS = [
-    "/jobs/search",
-    "/jobs?q=",
-    "/job-search",
-    "/search",
-    "/salary",
-    "/career-advice",
-    "/companies",
-]
 
-DIRECT_JOB_URL_HINTS = [
-    "/jobs/view/",
-    "/job/",
-    "/jobs/",
-    "greenhouse.io",
-    "lever.co",
-    "ashbyhq.com",
-    "workdayjobs.com",
-    "oraclecloud.com",
-    "successfactors",
-    "smartrecruiters",
-    "sabbar.com",
-    "careers.stc.com.sa",
-    "careers-page.com",
-]
+REJECT_SENIOR_TITLE = "مسمى أعلى من مستواك"
+REJECT_OLD = "قديمة أو مغلقة"
+REJECT_HIGH_EXPERIENCE = "تطلب خبرة 3+"
+REJECT_NOT_DATA = "مو تحليل بيانات"
+REJECT_LOCATION = "خارج السعودية"
+REJECT_HR_SYSTEMS = "أنظمة موارد بشرية"
+REJECT_PROCESS_ONLY = "توثيق عمليات بدون بيانات"
 
-COMPANY_LABELS = {
-    "stc": "stc (إس تي سي – اتصالات وتقنية)",
-    "sabbar": "Sabbar (صبار – منصة توظيف)",
-    "linkedin": "LinkedIn (لينكدإن – منصة وظائف وتواصل مهني)",
-    "sgr": "Saudi Gold Refinery (مصفاة الذهب السعودية – تعدين ومعادن ثمينة)",
-}
+# Error text SerpApi returns when a query simply has no jobs (not a problem).
+NO_RESULTS_ERROR = "hasn't returned any results"
 
 
-def clean_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()
-
-
-def normalize_url(url: str) -> str:
-    return (url or "").split("?")[0].rstrip("/")
-
+# ---------- Turning a Google Jobs result into an opportunity ----------
 
 def get_domain(url: str) -> str:
     return urlparse(url).netloc.lower().replace("www.", "")
@@ -223,234 +161,63 @@ def is_aggregator_url(url: str) -> bool:
     return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
 
 
-def is_direct_job_url(url: str) -> bool:
-    lower_url = url.lower()
+def choose_apply_link(job: dict) -> str:
+    """Company site first, then LinkedIn, then job boards, then the Google listing."""
+    links = [option.get("link", "") for option in job.get("apply_options", []) if option.get("link")]
 
-    if is_aggregator_url(lower_url):
-        return False
+    company_sites = [link for link in links if not is_aggregator_url(link) and "linkedin.com" not in link]
+    linkedin = [link for link in links if "linkedin.com" in link]
 
-    if contains_any(lower_url, BLOCKED_URL_PARTS):
-        if "/jobs/view/" not in lower_url:
-            return False
-
-    return contains_any(lower_url, DIRECT_JOB_URL_HINTS)
-
-
-def is_generic_search_result(title: str, url: str) -> bool:
-    title_lower = title.lower()
-    url_lower = url.lower()
-
-    if contains_any(title_lower, GENERIC_TITLE_TERMS):
-        return True
-
-    if re.search(r"\b\d{2,5}\s+.*jobs\b", title_lower):
-        return True
-
-    if "linkedin.com/jobs/" in url_lower and "/jobs/view/" not in url_lower:
-        return True
-
-    return False
+    for group in (company_sites, linkedin, links):
+        if group:
+            return group[0]
+    return job.get("share_link", "")
 
 
-def fetch_page_html(url: str) -> str:
-    try:
-        response = requests.get(
-            url,
-            timeout=15,
-            headers={"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/1.1"},
-        )
-        response.raise_for_status()
-    except requests.RequestException:
-        return ""
+def to_opportunity(job: dict) -> dict:
+    description = job.get("description", "")
+    posted_at = job.get("detected_extensions", {}).get("posted_at")
+    if posted_at:
+        description = f"Posted {posted_at}. {description}"
 
-    return response.text
-
-
-def fetch_page_text(url: str) -> str:
-    html = fetch_page_html(url)
-
-    if not html:
-        return ""
-
-    soup = BeautifulSoup(html, "html.parser")
-    return clean_text(soup.get_text(" ")[:9000]).lower()
+    return {
+        "title": job.get("title", ""),
+        "company": job.get("company_name", ""),
+        "location": job.get("location", ""),
+        "description": description,
+        "url": choose_apply_link(job),
+        "source": f"Google Jobs (via {job.get('via', '').replace('via ', '')})",
+        "is_real_job": True,
+    }
 
 
-def extract_original_job_url(url: str) -> str:
-    if is_direct_job_url(url):
-        return normalize_url(url)
-
-    if not is_aggregator_url(url):
-        return ""
-
-    html = fetch_page_html(url)
-
-    if not html:
-        return ""
-
-    soup = BeautifulSoup(html, "html.parser")
-    candidates = []
-
-    for link in soup.find_all("a"):
-        href = link.get("href")
-
-        if not href:
-            continue
-
-        full_url = urljoin(url, href)
-
-        if is_direct_job_url(full_url):
-            candidates.append(normalize_url(full_url))
-
-    if not candidates:
-        return ""
-
-    platform_priority = [
-        "careers-page.com",
-        "careers.stc.com.sa",
-        "linkedin.com/jobs/view",
-        "greenhouse.io",
-        "lever.co",
-        "ashbyhq.com",
-        "workdayjobs.com",
-        "oraclecloud.com",
-        "successfactors",
-        "smartrecruiters",
-    ]
-
-    for platform in platform_priority:
-        for candidate in candidates:
-            if platform in candidate.lower():
-                return candidate
-
-    return candidates[0]
-
-
-LINKEDIN_HIRING_TITLE = re.compile(r"^(?P<company>.+?) hiring (?P<title>.+?) in (?P<location>.+?)\s*\|\s*linkedin$", re.I)
-LINKEDIN_DASH_TITLE = re.compile(r"^(?P<title>.+?) - (?P<company>.+?) - linkedin$", re.I)
-
-
-def parse_linkedin_title(raw_title: str) -> tuple[str, str, str] | None:
-    """Split a LinkedIn search title into (job title, company, location)."""
-    raw_title = clean_text(raw_title)
-
-    match = LINKEDIN_HIRING_TITLE.match(raw_title)
-    if match:
-        return match["title"], match["company"], match["location"]
-
-    match = LINKEDIN_DASH_TITLE.match(raw_title)
-    if match:
-        return match["title"], match["company"], ""
-
-    return None
-
-
-def extract_company(title: str, url: str, snippet: str) -> str:
-    text = f"{title} {snippet}".lower()
-    domain = get_domain(url)
-
-    if "stc" in text or "careers.stc.com.sa" in domain:
-        return COMPANY_LABELS["stc"]
-
-    if "sabbar.com" in domain:
-        return COMPANY_LABELS["sabbar"]
-
-    if "linkedin.com" in domain:
-        return COMPANY_LABELS["linkedin"]
-
-    if domain.startswith("sgr.") or "saudi gold refinery" in text:
-        return COMPANY_LABELS["sgr"]
-
-    parts = domain.split(".")
-    if parts:
-        return parts[0]
-
-    return "غير معروف"
-
-
-def estimate_location(title: str, snippet: str) -> str:
-    text = f"{title} {snippet}".lower()
-
-    if "riyadh" in text or "الرياض" in text:
-        return "الرياض"
-    if "khobar" in text or "dammam" in text or "dhahran" in text or "eastern" in text or "الشرقية" in text:
-        return "الشرقية"
-    if "qassim" in text or "القصيم" in text:
-        return "القصيم"
-    if "saudi" in text or "ksa" in text or "السعودية" in text:
-        return "السعودية"
-
-    return "غير مذكورة"
-
-
-REJECT_NOT_JOB_PAGE = "مو صفحة إعلان"
-REJECT_SENIOR_TITLE = "مسمى أعلى من مستواك"
-REJECT_OLD = "قديمة أو مغلقة"
-REJECT_HIGH_EXPERIENCE = "تطلب خبرة 3+"
-REJECT_NOT_DATA = "مو تحليل بيانات"
-REJECT_LOCATION = "خارج مدن السعودية المستهدفة"
-REJECT_HR_SYSTEMS = "أنظمة موارد بشرية"
-REJECT_PROCESS_ONLY = "توثيق عمليات بدون بيانات"
-
-
-def result_rejection_reason(title: str, snippet: str, url: str) -> str | None:
-    """Why a search result is not worth showing, or None if it is."""
-    combined = f"{title} {snippet} {url}".lower()
-
-    if not is_direct_job_url(url) or is_generic_search_result(title, url):
-        return REJECT_NOT_JOB_PAGE
+def job_rejection_reason(opportunity: dict) -> str | None:
+    """Why a job is not worth showing, or None if it is. Same rules as the scorer."""
+    title = opportunity["title"]
+    text = f"{title} {opportunity['location']} {opportunity['description']}".lower()
 
     if contains_any(title, BAD_TITLE_SIGNALS):
         return REJECT_SENIOR_TITLE
-
-    if is_stale_posting(combined):
+    if is_stale_posting(text):
         return REJECT_OLD
-
-    if has_high_experience(combined):
+    if has_high_experience(text):
         return REJECT_HIGH_EXPERIENCE
-
-    if not (contains_any(combined, TARGET_TITLE_TERMS) and contains_any(combined, DATA_CONTEXT_TERMS)):
+    if not (contains_any(text, TARGET_TITLE_TERMS) and contains_any(text, DATA_CONTEXT_TERMS)):
         return REJECT_NOT_DATA
-
-    if not contains_any(combined, LOCATION_TERMS):
+    if not contains_any(opportunity["location"], LOCATION_TERMS):
         return REJECT_LOCATION
-
-    # The job page can also list other jobs ("Similar jobs"), so only explicit
-    # closure and experience requirements are read from it, not titles or ages.
-    page_text = fetch_page_text(url)
-    full_text = f"{combined} {page_text}"
-
-    if contains_any(page_text, CLOSED_POSTING_SIGNALS):
-        return REJECT_OLD
-
-    if has_high_experience(full_text):
-        return REJECT_HIGH_EXPERIENCE
-
-    if is_hris_heavy_role(title, full_text):
+    if is_hris_heavy_role(title, text):
         return REJECT_HR_SYSTEMS
-
-    if is_process_only_business_role(title, full_text):
+    if is_process_only_business_role(title, text):
         return REJECT_PROCESS_ONLY
-
     return None
 
 
-def is_good_result(title: str, snippet: str, url: str) -> bool:
-    return result_rejection_reason(title, snippet, url) is None
+# ---------- What happened in the last run (shown in the daily message) ----------
 
-
-def build_description(title: str, snippet: str) -> str:
-    text = clean_text(f"{title}. {snippet}")
-
-    if not text:
-        return "إعلان وظيفة محتمل في مجال تحليل البيانات."
-
-    return text[:900]
-
-
-# Problems from the last search run (no key, quota used up...), shown in
-# the daily message so a quiet day isn't mistaken for "no jobs".
 SEARCH_PROBLEMS: list[str] = []
+SEARCH_STATS: Counter = Counter()  # "found", "kept", "rejected:<reason>"
+SEARCH_LOG: list[str] = []
 
 
 def record_search_problem(problem: str) -> None:
@@ -462,11 +229,6 @@ def get_search_problems() -> list[str]:
     return list(SEARCH_PROBLEMS)
 
 
-# Counts from the last search run, shown in the daily message:
-# "found", "kept" and "rejected:<reason>".
-SEARCH_STATS: Counter = Counter()
-
-
 def get_search_stats() -> dict:
     rejected = {
         key.split(":", 1)[1]: count
@@ -476,12 +238,8 @@ def get_search_stats() -> dict:
     return {"found": SEARCH_STATS["found"], "kept": SEARCH_STATS["kept"], "rejected": rejected}
 
 
-SEARCH_LOG: list[str] = []
-
-
-def log_result(decision: str, title: str, url: str) -> None:
-    """One line per search result in the GitHub Actions log, to review the filters."""
-    line = f"{decision} | {title} | {url}"
+def log_result(decision: str, title: str, company: str, url: str) -> None:
+    line = f"{decision} | {title} | {company} | {url}"
     SEARCH_LOG.append(line)
     print(f"[search] {line}")
 
@@ -495,25 +253,20 @@ def publish_search_log_notice() -> None:
     print(f"::notice title=Search results::{escaped}")
 
 
-def serpapi_search(query: str, limit: int = 5) -> list[dict]:
-    api_key = os.getenv("SERPAPI_KEY")
+# ---------- Searching ----------
 
-    if not api_key:
-        record_search_problem("البحث في Google متوقف: مفتاح SERPAPI_KEY غير موجود في GitHub Secrets.")
-        return []
-
+def fetch_google_jobs(query: str, api_key: str) -> list[dict]:
     params = {
-        "engine": "google",
+        "engine": "google_jobs",
         "q": query,
-        "api_key": api_key,
-        "hl": "en",
+        "location": SEARCH_LOCATION,
         "gl": "sa",
-        "num": limit,
-        "tbs": "qdr:m",
+        "hl": "en",
+        "api_key": api_key,
     }
 
     try:
-        response = requests.get(SERPAPI_URL, params=params, timeout=25)
+        response = requests.get(SERPAPI_URL, params=params, timeout=40)
     except requests.RequestException as error:
         reason = str(error).replace(api_key, "***")[:150]
         record_search_problem(f"تعذر الاتصال بـ SerpApi ({type(error).__name__}: {reason}).")
@@ -525,68 +278,37 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         record_search_problem(f"رد SerpApi غير مفهوم (HTTP {response.status_code}).")
         return []
 
-    if data.get("error"):
-        record_search_problem(f"SerpApi: {data['error']}")
+    error = data.get("error")
+    if error:
+        if NO_RESULTS_ERROR not in error:
+            record_search_problem(f"SerpApi: {error}")
         return []
-    results = []
 
-    for item in data.get("organic_results", []):
-        title = clean_text(item.get("title", ""))
-        snippet = clean_text(item.get("snippet", ""))
-        raw_url = item.get("link", "")
+    return data.get("jobs_results", [])
 
-        if not title or not raw_url:
-            continue
 
+def search_jobs(query: str, api_key: str) -> list[dict]:
+    kept = []
+    for job in fetch_google_jobs(query, api_key):
         SEARCH_STATS["found"] += 1
-        final_url = extract_original_job_url(raw_url)
-
-        if not final_url:
-            SEARCH_STATS[f"rejected:{REJECT_NOT_JOB_PAGE}"] += 1
-            log_result(REJECT_NOT_JOB_PAGE, title, raw_url)
-            continue
-
-        company = ""
-        listed_location = ""
-        parsed_title = parse_linkedin_title(title) if "linkedin.com" in final_url else None
-        if parsed_title:
-            title, company, listed_location = parsed_title
-
-        reason = result_rejection_reason(title, f"{listed_location} {snippet}", final_url)
+        opportunity = to_opportunity(job)
+        reason = job_rejection_reason(opportunity)
         if reason:
             SEARCH_STATS[f"rejected:{reason}"] += 1
-            log_result(reason, title, final_url)
+            log_result(reason, opportunity["title"], opportunity["company"], opportunity["url"])
             continue
-
         SEARCH_STATS["kept"] += 1
-        log_result("kept", title, final_url)
-
-        company = company or extract_company(title, final_url, snippet)
-        location = estimate_location(listed_location, f"{title} {snippet}")
-
-        results.append(
-            {
-                "title": title,
-                "company": company,
-                "location": location,
-                "description": build_description(title, snippet),
-                "url": normalize_url(final_url),
-                "source": "SerpApi Google Search",
-                "category": "🟢 قدّم الآن",
-                "is_real_job": True,
-            }
-        )
-
-    return results
+        log_result("kept", opportunity["title"], opportunity["company"], opportunity["url"])
+        kept.append(opportunity)
+    return kept
 
 
 def deduplicate(items: list[dict]) -> list[dict]:
+    """The same job often appears in several searches; keep it once."""
     unique = {}
-
     for item in items:
-        key = normalize_url(item.get("url", "")) or f'{item.get("title", "")}-{item.get("company", "")}'
-        unique[key] = item
-
+        key = (item["title"].lower().strip(), item["company"].lower().strip())
+        unique.setdefault(key, item)
     return list(unique.values())
 
 
@@ -601,29 +323,28 @@ def choose_queries_for_day(day_number: int, per_run: int) -> list[str]:
     return rotated[:per_run]
 
 
-def search_market_opportunities(limit: int = 8) -> list[dict]:
-    all_results = []
+def search_market_opportunities(limit: int = 15) -> list[dict]:
     SEARCH_PROBLEMS.clear()
     SEARCH_STATS.clear()
     SEARCH_LOG.clear()
-    queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
-    for query in queries:
+    api_key = os.getenv("SERPAPI_KEY")
+    if not api_key:
+        record_search_problem("البحث في Google متوقف: مفتاح SERPAPI_KEY غير موجود في GitHub Secrets.")
+        return []
+
+    all_results = []
+    for query in choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN):
         print(f"[search] query: {query}")
         SEARCH_LOG.append(f"QUERY: {query}")
-        all_results.extend(serpapi_search(query, limit=RESULTS_PER_SEARCH))
-
-        if len(all_results) >= limit * 2:
-            break
+        all_results.extend(search_jobs(query, api_key))
 
     publish_search_log_notice()
-    unique_results = deduplicate(all_results)
-
-    return unique_results[:limit]
+    return deduplicate(all_results)[:limit]
 
 
 def build_search_engine_status() -> str:
     if os.getenv("SERPAPI_KEY"):
-        return "محرك البحث مفعّل: SerpApi."
+        return "محرك البحث مفعّل: SerpApi Google Jobs."
 
     return "محرك البحث غير مفعّل: أضف SERPAPI_KEY في GitHub Secrets."
