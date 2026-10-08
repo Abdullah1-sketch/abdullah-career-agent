@@ -307,6 +307,25 @@ def extract_original_job_url(url: str) -> str:
     return candidates[0]
 
 
+LINKEDIN_HIRING_TITLE = re.compile(r"^(?P<company>.+?) hiring (?P<title>.+?) in (?P<location>.+?)\s*\|\s*linkedin$", re.I)
+LINKEDIN_DASH_TITLE = re.compile(r"^(?P<title>.+?) - (?P<company>.+?) - linkedin$", re.I)
+
+
+def parse_linkedin_title(raw_title: str) -> tuple[str, str, str] | None:
+    """Split a LinkedIn search title into (job title, company, location)."""
+    raw_title = clean_text(raw_title)
+
+    match = LINKEDIN_HIRING_TITLE.match(raw_title)
+    if match:
+        return match["title"], match["company"], match["location"]
+
+    match = LINKEDIN_DASH_TITLE.match(raw_title)
+    if match:
+        return match["title"], match["company"], ""
+
+    return None
+
+
 def extract_company(title: str, url: str, snippet: str) -> str:
     text = f"{title} {snippet}".lower()
     domain = get_domain(url)
@@ -434,11 +453,17 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         if not final_url:
             continue
 
-        if not is_good_result(title, snippet, final_url):
+        company = ""
+        listed_location = ""
+        parsed_title = parse_linkedin_title(title) if "linkedin.com" in final_url else None
+        if parsed_title:
+            title, company, listed_location = parsed_title
+
+        if not is_good_result(title, f"{listed_location} {snippet}", final_url):
             continue
 
-        company = extract_company(title, final_url, snippet)
-        location = estimate_location(title, snippet)
+        company = company or extract_company(title, final_url, snippet)
+        location = estimate_location(listed_location, f"{title} {snippet}")
 
         results.append(
             {

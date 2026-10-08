@@ -42,5 +42,50 @@ class ResultFilterTests(unittest.TestCase):
         self.assertFalse(check_result("Data Analyst", "Riyadh, Saudi Arabia. Excel reporting.", page))
 
 
+class LinkedInTitleTests(unittest.TestCase):
+    def test_hiring_format(self):
+        parsed = engine.parse_linkedin_title(
+            "Riyadh Pay hiring Junior Data Analyst in Riyadh, Riyadh, Saudi Arabia | LinkedIn"
+        )
+        self.assertEqual(parsed, ("Junior Data Analyst", "Riyadh Pay", "Riyadh, Riyadh, Saudi Arabia"))
+
+    def test_dash_format(self):
+        parsed = engine.parse_linkedin_title("BI Analyst - Eastern Health Services - LinkedIn")
+        self.assertEqual(parsed, ("BI Analyst", "Eastern Health Services", ""))
+
+    def test_unknown_format_returns_none(self):
+        self.assertIsNone(engine.parse_linkedin_title("Data Analyst"))
+
+
+class FakeResponse:
+    def __init__(self, data):
+        self.data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.data
+
+
+class SerpApiSearchTests(unittest.TestCase):
+    def search(self, data):
+        with patch.dict("os.environ", {"SERPAPI_KEY": "test-key"}), \
+                patch.object(engine.requests, "get", return_value=FakeResponse(data)), \
+                patch.object(engine, "fetch_page_text", return_value="excel and power bi reporting"):
+            return engine.serpapi_search("any query")
+
+    def test_linkedin_result_uses_real_company_and_title(self):
+        results = self.search({"organic_results": [{
+            "title": "Riyadh Pay hiring Junior Data Analyst in Riyadh, Saudi Arabia | LinkedIn",
+            "snippet": "Excel, Power BI and SQL reporting. 0-2 years.",
+            "link": LINKEDIN_URL,
+        }]})
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["title"], "Junior Data Analyst")
+        self.assertEqual(results[0]["company"], "Riyadh Pay")
+        self.assertEqual(results[0]["location"], "الرياض")
+
+
 if __name__ == "__main__":
     unittest.main()
