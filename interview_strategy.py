@@ -102,8 +102,6 @@ def detect_message_focus(title: str, description: str) -> str:
         focus.append("Power BI")
     if contains_any(text, ["excel", "reporting", "reports"]):
         focus.append("Excel والتقارير")
-    if contains_any(text, ["sql", "database", "query"]):
-        focus.append("SQL")
     if contains_any(text, ["kpi", "metrics", "performance"]):
         focus.append("مؤشرات الأداء")
     if contains_any(text, ["data quality", "cleaning"]):

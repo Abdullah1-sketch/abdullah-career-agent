@@ -1,6 +1,17 @@
 from opportunity_scoring import Opportunity, score_opportunity
 from interview_path import recommend_interview_path
-from config import MAX_APPLY_NOW_JOBS, MAX_QUICK_APPLY_JOBS, MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
+from config import (
+    MAX_APPLY_NOW_JOBS,
+    MAX_MISSING_SKILLS_PENALTY,
+    MAX_QUICK_APPLY_JOBS,
+    MEDIUM_SCORE,
+    MISSING_PLATFORM_PENALTY,
+    MISSING_SKILL_PENALTY,
+    STRONG_SCORE,
+    TOO_MANY_YEARS,
+    WATCH_SCORE,
+)
+from job_verification import verify_job
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
@@ -141,28 +152,6 @@ def translate_action(action: str) -> str:
     }.get(action, action)
 
 
-def estimate_experience(opportunity_data: dict) -> str:
-    text = " ".join(
-        [
-            opportunity_data.get("title", ""),
-            opportunity_data.get("description", ""),
-        ]
-    ).lower()
-
-    if contains_any(text, ["tamheer", "تمهير"]):
-        return "تمهير / حديث تخرج"
-    if contains_any(text, ["intern", "internship", "coop", "trainee", "تدريب"]):
-        return "تدريب / حديث تخرج"
-    if contains_any(text, ["fresh graduate", "graduate", "حديث تخرج", "خريج"]):
-        return "حديث تخرج"
-    if contains_any(text, ["junior", "entry level", "0-1", "0-2", "0-3", "1-2 years", "2 years"]):
-        return "0-3 سنوات"
-    if contains_any(text, ["senior", "lead", "manager", "5+", "7+"]):
-        return "أعلى من المستوى المستهدف غالبًا"
-
-    return "غير مذكورة"
-
-
 def estimate_city(opportunity_data: dict) -> str:
     text = " ".join(
         [
@@ -194,56 +183,129 @@ def build_opportunity(opportunity_data: dict) -> Opportunity:
     )
 
 
-def get_score(opportunity_data: dict) -> int:
-    return score_opportunity(build_opportunity(opportunity_data))["score"]
+APPLY_NOW = "🟢 قدّم الآن"
+VERIFY_FIRST = "🟡 قوية، تحقق قبل التقديم"
+QUICK_APPLY = "🟡 قدّم سريع"
+WATCH = "🟡 راقب"
+LOW = "⚪ راقب"
+EXCLUDED = "⛔ مستبعدة"
+
+EXCLUDED_CLOSED = "مغلقة"
+EXCLUDED_HIGH_EXPERIENCE = "تطلب خبرة 3+"
 
 
-def get_category(opportunity_data: dict, score: int) -> str:
+def skill_gap_penalty(requirements: dict) -> int:
+    platforms = len(requirements["missing_platforms"])
+    others = len(requirements["missing"]) - platforms
+    return platforms * MISSING_PLATFORM_PENALTY + min(others * MISSING_SKILL_PENALTY, MAX_MISSING_SKILLS_PENALTY)
+
+
+def choose_category(opportunity_data: dict, score: int, verification: dict | None, excluded: str | None) -> str:
     if opportunity_data.get("is_real_job") is False:
-        return "⚪ راقب"
-
+        return LOW
+    if excluded:
+        return EXCLUDED
     if score >= STRONG_SCORE:
-        return "🟢 قدّم الآن"
-
+        return APPLY_NOW if verification and verification["verified"] else VERIFY_FIRST
     if score >= MEDIUM_SCORE:
-        return "🟡 قدّم سريع"
-
+        return QUICK_APPLY
     if score >= WATCH_SCORE:
-        return "🟡 راقب"
-
-    return "⚪ راقب"
-
-
-def build_missing_items(opportunity_data: dict) -> str:
-    text = " ".join(
-        [
-            opportunity_data.get("title", ""),
-            opportunity_data.get("description", ""),
-        ]
-    ).lower()
-
-    missing = []
-
-    if "sql" in text:
-        missing.append("راجع SQL")
-    if "python" in text:
-        missing.append("Python قد يكون مطلوبًا")
-    if contains_any(text, ["tableau", "looker"]):
-        missing.append("قد تحتاج Tableau/Looker")
-    if contains_any(text, ["statistics", "statistical", "إحصاء"]):
-        missing.append("راجع أساسيات الإحصاء")
-
-    if not missing:
-        return "لا يظهر نقص واضح"
-
-    return "، ".join(missing[:2])
+        return WATCH
+    return LOW
 
 
-def build_extra_push(opportunity_data: dict, score: int) -> str:
+def assess(opportunity_data: dict) -> dict:
+    """Keyword score, then a check of the original posting for promising jobs.
+
+    Cached on the item so each posting is opened once per run.
+    """
+    if "assessment" in opportunity_data:
+        return opportunity_data["assessment"]
+
+    scoring = score_opportunity(build_opportunity(opportunity_data))
+    score = scoring["score"]
+    verification = None
+    excluded = None
+
+    if opportunity_data.get("is_real_job") is not False and score >= MEDIUM_SCORE:
+        verification = verify_job(opportunity_data)
+        years = verification["experience_years"]
+        if verification["status"] == "closed":
+            excluded = EXCLUDED_CLOSED
+        elif years is not None and years >= TOO_MANY_YEARS:
+            excluded = EXCLUDED_HIGH_EXPERIENCE
+        else:
+            score = max(0, score - skill_gap_penalty(verification["requirements"]))
+
+    assessment = {
+        "scoring": scoring,
+        "score": score,
+        "verification": verification,
+        "excluded": excluded,
+        "category": choose_category(opportunity_data, score, verification, excluded),
+    }
+    opportunity_data["assessment"] = assessment
+    return assessment
+
+
+def get_score(opportunity_data: dict) -> int:
+    return assess(opportunity_data)["score"]
+
+
+def get_category(opportunity_data: dict, score: int | None = None) -> str:
+    return assess(opportunity_data)["category"]
+
+
+def best_link(opportunity_data: dict) -> str:
+    verification = assess(opportunity_data)["verification"]
+    if verification and verification["source_url"]:
+        return verification["source_url"]
+    return opportunity_data["url"]
+
+
+def describe_experience(years: int | None) -> str:
+    if years is None:
+        return "غير مذكورة في الإعلان"
+    if years == 0:
+        return "بدون خبرة"
+    if years == 1:
+        return "سنة على الأقل"
+    if years == 2:
+        return "سنتين على الأقل"
+    return f"{years} سنوات على الأقل"
+
+
+def describe_verification(verification: dict | None) -> str:
+    if verification is None:
+        return "⚠️ ما تم التحقق"
+    if verification["verified"]:
+        return "✅ من إعلان الشركة الأصلي، والتقديم مفتوح"
+    source = verification["source"]
+    if source == "linkedin":
+        return "⚠️ إعلان LinkedIn ما أقدر أفتحه: تأكد بنفسك إنه مفتوح ومن الخبرة المطلوبة"
+    if source == "job_board":
+        return "⚠️ منشور في موقع تجميع وما لقيت إعلان الشركة الأصلي"
+    if source == "company":
+        return "⚠️ صفحة الشركة ما انفتحت أو ما فيها تفاصيل كافية"
+    return "⚠️ مصدر غير معروف"
+
+
+def describe_requirements(verification: dict | None) -> str:
+    if verification is None:
+        return "غير معروفة"
+    requirements = verification["requirements"]
+    parts = []
+    if requirements["have"]:
+        parts.append("عندك: " + "، ".join(requirements["have"]))
+    if requirements["learning"]:
+        parts.append("تتعلمها: " + "، ".join(requirements["learning"]))
+    if requirements["missing"]:
+        parts.append("ناقصك: " + "، ".join(requirements["missing"]))
+    return " | ".join(parts) if parts else "ما ذكر أدوات محددة"
+
+
+def build_extra_push(opportunity_data: dict) -> str:
     city = estimate_city(opportunity_data)
-
-    if score < STRONG_SCORE:
-        return ""
 
     if city not in ["الرياض", "الشرقية", "القصيم"]:
         return ""
@@ -257,36 +319,42 @@ def build_extra_push(opportunity_data: dict, score: int) -> str:
 
 
 def build_opportunity_section(opportunity_data: dict) -> str:
-    opportunity = build_opportunity(opportunity_data)
-    scoring = score_opportunity(opportunity)
-    interview_path = recommend_interview_path(opportunity_data, scoring)
-    record = build_application_record(opportunity_data, scoring, interview_path)
+    assessment = assess(opportunity_data)
+    scoring = dict(assessment["scoring"], score=assessment["score"])
+    verification = assessment["verification"]
+    category = assessment["category"]
+    score = assessment["score"]
 
-    score = record["score"]
-    category = get_category(opportunity_data, score)
-    reasons = [translate_reason(reason) for reason in record["reasons"][:2]]
-    actions = [translate_action(action) for action in record["recommended_actions"][:2]]
-    strategy = build_interview_strategy(opportunity_data, score)
+    reasons = [translate_reason(reason) for reason in scoring["reasons"][:2]]
+
+    if category == APPLY_NOW:
+        interview_path = recommend_interview_path(opportunity_data, scoring)
+        actions = [translate_action(action) for action in interview_path["actions"][:2]]
+        extras = build_extra_push(opportunity_data) + build_interview_strategy(opportunity_data, score)
+    else:
+        actions = ["افتح الرابط وتأكد إن التقديم مفتوح والخبرة المطلوبة قبل ما تقدّم"]
+        extras = ""
+
+    years = verification["experience_years"] if verification else None
 
     return f"""{category}
 
-{translate_job_title(record["title"])}
-الشركة: {record["company"]}
+{translate_job_title(opportunity_data["title"])}
+الشركة: {opportunity_data["company"]}
 المدينة: {estimate_city(opportunity_data)}
-الخبرة: {estimate_experience(opportunity_data)}
+الخبرة المطلوبة: {describe_experience(years)}
 التوافق: {score}/100
+التحقق: {describe_verification(verification)}
+المتطلبات: {describe_requirements(verification)}
 
 ليش؟
 {chr(10).join("- " + reason for reason in reasons)}
-
-ينقصك:
-- {build_missing_items(opportunity_data)}
 
 الإجراء:
 {chr(10).join("- " + action for action in actions)}
 
 الرابط:
-{record["url"]}{build_extra_push(opportunity_data, score)}{strategy}"""
+{best_link(opportunity_data)}{extras}"""
 
 
 def search_market_safely() -> list[dict]:
@@ -325,38 +393,30 @@ def get_current_opportunities() -> list[dict]:
 
 
 def sort_opportunities(opportunities: list[dict]) -> list[dict]:
+    category_ranks = {APPLY_NOW: 0, VERIFY_FIRST: 1, QUICK_APPLY: 2, WATCH: 3}
+
     def sort_key(item: dict) -> tuple[int, int, int]:
-        score = get_score(item)
-        category = get_category(item, score)
-
-        if category.startswith("🟢"):
-            category_rank = 0
-        elif category.startswith("🟡 قدّم سريع"):
-            category_rank = 1
-        elif category.startswith("🟡"):
-            category_rank = 2
-        else:
-            category_rank = 3
-
-        city = estimate_city(item)
-        city_rank = {
-            "الرياض": 0,
-            "الشرقية": 1,
-            "القصيم": 2,
-            "السعودية": 3,
-        }.get(city, 4)
-
-        return (category_rank, city_rank, -score)
+        assessment = assess(item)
+        category_rank = category_ranks.get(assessment["category"], 4)
+        city_rank = {"الرياض": 0, "الشرقية": 1, "القصيم": 2, "السعودية": 3}.get(estimate_city(item), 4)
+        return (category_rank, city_rank, -assessment["score"])
 
     return sorted(opportunities, key=sort_key)
 
 
 def build_quick_apply_line(opportunity_data: dict) -> str:
-    score = get_score(opportunity_data)
-    return (
+    assessment = assess(opportunity_data)
+    verification = assessment["verification"]
+    badge = "✅" if verification and verification["verified"] else "⚠️ تحقق منها"
+    years = verification["experience_years"] if verification else None
+    line = (
         f"- {translate_job_title(opportunity_data['title'])} | {opportunity_data['company']} | "
-        f"{estimate_city(opportunity_data)} | {score}/100\n  {opportunity_data['url']}"
+        f"{estimate_city(opportunity_data)} | {assessment['score']}/100 | {badge}\n"
+        f"  الخبرة: {describe_experience(years)}"
     )
+    if verification and verification["requirements"]["missing"]:
+        line += " | ناقصك: " + "، ".join(verification["requirements"]["missing"])
+    return line + f"\n  {best_link(opportunity_data)}"
 
 
 def build_quick_apply_list(opportunities: list[dict]) -> str:
@@ -396,18 +456,26 @@ def build_company_pages_summary(opportunities: list[dict]) -> str:
 
 
 def build_score_summary(opportunities: list[dict]) -> str:
-    counts = {"🟢": 0, "🟡 قدّم سريع": 0, "other": 0}
+    counts = {APPLY_NOW: 0, VERIFY_FIRST: 0, QUICK_APPLY: 0, "other": 0}
+    excluded = {}
     for item in opportunities:
         if item.get("is_real_job") is False:
             continue
-        category = get_category(item, get_score(item))
-        if category.startswith("🟢"):
-            counts["🟢"] += 1
-        elif category.startswith("🟡 قدّم سريع"):
-            counts["🟡 قدّم سريع"] += 1
+        assessment = assess(item)
+        if assessment["excluded"]:
+            excluded[assessment["excluded"]] = excluded.get(assessment["excluded"], 0) + 1
+        elif assessment["category"] in counts:
+            counts[assessment["category"]] += 1
         else:
             counts["other"] += 1
-    return f"- التقييم: قدّم الآن {counts['🟢']}، تقديم سريع {counts['🟡 قدّم سريع']}، ضعيفة {counts['other']}"
+
+    line = (
+        f"- التقييم: قدّم الآن {counts[APPLY_NOW]}، تحقق قبل التقديم {counts[VERIFY_FIRST]}، "
+        f"تقديم سريع {counts[QUICK_APPLY]}، ضعيفة {counts['other']}"
+    )
+    if excluded:
+        line += "\n  استبعدتها بعد فتح الإعلان: " + "، ".join(f"{reason} {count}" for reason, count in excluded.items())
+    return line
 
 
 def build_check_summary(opportunities: list[dict]) -> str:
@@ -426,34 +494,27 @@ def build_daily_radar_message() -> str:
 
 
 def build_opportunities_message(opportunities: list[dict]) -> str:
+    def in_category(category: str) -> list[dict]:
+        return [item for item in opportunities if assess(item)["category"] == category]
 
-    apply_now = [
-        opportunity for opportunity in opportunities
-        if get_category(opportunity, get_score(opportunity)).startswith("🟢")
-    ]
+    apply_now = in_category(APPLY_NOW)
+    verify_first = in_category(VERIFY_FIRST)
+    quick_apply = in_category(QUICK_APPLY)
+    watch = in_category(WATCH)
 
-    fast_apply = [
-        opportunity for opportunity in opportunities
-        if get_category(opportunity, get_score(opportunity)).startswith("🟡 قدّم سريع")
-    ]
+    if not (apply_now or verify_first or quick_apply):
+        if watch:
+            return "لا توجد فرصة قوية اليوم.\n\nإشارة للمراقبة فقط:\n\n" + build_opportunity_section(watch[0])
+        return build_no_opportunity_message()
 
-    early_signals = [
-        opportunity for opportunity in opportunities
-        if get_category(opportunity, get_score(opportunity)) == "🟡 راقب"
-    ]
-
-    if apply_now or fast_apply:
-        sections = []
-        if apply_now:
-            sections.append("فرص اليوم:")
-            sections.extend(build_opportunity_section(item) for item in apply_now[:MAX_APPLY_NOW_JOBS])
-        else:
-            sections.append("لا توجد فرصة ذهبية اليوم.")
-        if fast_apply:
-            sections.append(build_quick_apply_list(fast_apply[:MAX_QUICK_APPLY_JOBS]))
-        return "\n\n".join(sections)
-
-    if early_signals:
-        return "لا توجد فرصة قوية اليوم.\n\nإشارة للمراقبة فقط:\n\n" + build_opportunity_section(early_signals[0])
-
-    return build_no_opportunity_message()
+    sections = []
+    if apply_now:
+        sections.append("فرص اليوم (متحقق منها):")
+        sections.extend(build_opportunity_section(item) for item in apply_now[:MAX_APPLY_NOW_JOBS])
+    else:
+        sections.append("لا توجد فرصة متحقق منها 100% اليوم.")
+    if verify_first:
+        sections.extend(build_opportunity_section(item) for item in verify_first[:MAX_APPLY_NOW_JOBS])
+    if quick_apply:
+        sections.append(build_quick_apply_list(quick_apply[:MAX_QUICK_APPLY_JOBS]))
+    return "\n\n".join(sections)

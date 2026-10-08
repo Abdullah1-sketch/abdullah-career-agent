@@ -71,6 +71,11 @@ class JobConversionTests(unittest.TestCase):
         self.assertIn("Power BI", job["description"])
         self.assertIn("Posted 3 days ago", job["description"])
 
+    def test_all_apply_links_are_kept_for_verification(self):
+        links = ("https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/", "https://careers.riyadhpay.sa/jobs/1")
+        job = engine.to_opportunity(google_job(apply_links=links))
+        self.assertEqual(job["apply_links"], list(links))
+
     def test_company_site_link_is_preferred(self):
         job = engine.to_opportunity(google_job(apply_links=(
             "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/",

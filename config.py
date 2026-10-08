@@ -301,7 +301,7 @@ ABDULLAH_LEARNING_SKILLS = ["SQL"]
 PLATFORM_SKILLS = ["SAP", "ServiceNow", "Salesforce", "Oracle ERP"]
 
 # Points removed for skills the posting asks for and Abdullah doesn't have.
-MISSING_PLATFORM_PENALTY = 20
+MISSING_PLATFORM_PENALTY = 30
 MISSING_SKILL_PENALTY = 4
 MAX_MISSING_SKILLS_PENALTY = 12
 
