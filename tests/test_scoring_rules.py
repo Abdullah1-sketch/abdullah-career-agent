@@ -72,6 +72,13 @@ class ExperienceRangeTests(unittest.TestCase):
         self.assert_too_experienced("خبرة لا تقل عن ٣ سنوات")
         self.assert_too_experienced("خبرة لا تقل عن خمس سنوات")
 
+    def test_common_saudi_posting_formats(self):
+        self.assert_too_experienced("خبرة (3-5) سنوات في تحليل البيانات")
+        self.assert_too_experienced("Experience: (3 – 5) years in reporting")
+        self.assert_too_experienced("Years of experience: 3-5")
+        self.assert_too_experienced("سنوات الخبرة: 4")
+        self.assert_not_too_experienced("Years of experience: 0-2")
+
     def test_years_unrelated_to_experience_are_ignored(self):
         self.assert_not_too_experienced("Join a company growing for 10 years in Riyadh. Excel reporting.")
 
