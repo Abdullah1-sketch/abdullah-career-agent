@@ -4,6 +4,7 @@ from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
 from job_search_engine import search_market_opportunities
+from interview_strategy import build_interview_strategy
 
 
 TITLE_TRANSLATIONS = {
@@ -285,6 +286,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
     category = get_category(opportunity_data, score)
     reasons = [translate_reason(reason) for reason in record["reasons"][:2]]
     actions = [translate_action(action) for action in record["recommended_actions"][:2]]
+    strategy = build_interview_strategy(opportunity_data, score)
 
     return f"""{category}
 
@@ -304,7 +306,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 {chr(10).join("- " + action for action in actions)}
 
 الرابط:
-{record["url"]}{build_extra_push(opportunity_data, score)}"""
+{record["url"]}{build_extra_push(opportunity_data, score)}{strategy}"""
 
 
 def search_market_safely() -> list[dict]:
