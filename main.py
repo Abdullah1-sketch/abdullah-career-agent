@@ -1,5 +1,6 @@
 import argparse
 
+from application_log import build_score_vs_outcome_report, load_applications
 from career_radar import build_daily_radar_message
 from config import get_settings
 from telegram_notifier import TelegramNotifier
@@ -23,10 +24,21 @@ def test_telegram() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Abdullah Career Agent")
     parser.add_argument("--test-telegram", action="store_true")
+    parser.add_argument(
+        "--review-applications",
+        nargs="?",
+        const="applications.csv",
+        metavar="CSV",
+        help="Compare the bot's scores with replies you got (default: applications.csv)",
+    )
     args = parser.parse_args()
 
     if args.test_telegram:
         test_telegram()
+        return
+
+    if args.review_applications:
+        print(build_score_vs_outcome_report(load_applications(args.review_applications)))
         return
 
     parser.print_help()
