@@ -41,6 +41,16 @@ class ResultFilterTests(unittest.TestCase):
         page = "Data Analyst. Riyadh. No longer accepting applications."
         self.assertFalse(check_result("Data Analyst", "Riyadh, Saudi Arabia. Excel reporting.", page))
 
+    def test_rejection_reasons_are_specific(self):
+        with patch.object(engine, "fetch_page_text", return_value=""):
+            reason = engine.result_rejection_reason
+            self.assertEqual(reason("Senior Data Analyst", "Riyadh. Data.", LINKEDIN_URL), engine.REJECT_SENIOR_TITLE)
+            self.assertEqual(reason("Data Analyst", "Riyadh. 3+ years of experience. Data.", LINKEDIN_URL),
+                             engine.REJECT_HIGH_EXPERIENCE)
+            self.assertEqual(reason("Sales Executive", "Riyadh. Sales targets.", LINKEDIN_URL), engine.REJECT_NOT_DATA)
+            self.assertEqual(reason("Data Analyst", "Dubai. Excel reporting.", LINKEDIN_URL), engine.REJECT_LOCATION)
+            self.assertIsNone(reason("Data Analyst", "Riyadh. Excel reporting.", LINKEDIN_URL))
+
 
 class LinkedInTitleTests(unittest.TestCase):
     def test_hiring_format(self):
@@ -85,6 +95,19 @@ class SerpApiSearchTests(unittest.TestCase):
         self.assertEqual(results[0]["title"], "Junior Data Analyst")
         self.assertEqual(results[0]["company"], "Riyadh Pay")
         self.assertEqual(results[0]["location"], "الرياض")
+
+    def test_search_counts_found_and_rejected_results(self):
+        engine.SEARCH_STATS.clear()
+        self.search({"organic_results": [
+            {"title": "Riyadh Pay hiring Junior Data Analyst in Riyadh, Saudi Arabia | LinkedIn",
+             "snippet": "Excel and Power BI.", "link": LINKEDIN_URL},
+            {"title": "Riyadh Pay hiring Senior Data Analyst in Riyadh, Saudi Arabia | LinkedIn",
+             "snippet": "Excel and Power BI.", "link": "https://www.linkedin.com/jobs/view/4000000001"},
+        ]})
+        stats = engine.get_search_stats()
+        self.assertEqual(stats["found"], 2)
+        self.assertEqual(stats["kept"], 1)
+        self.assertEqual(stats["rejected"], {engine.REJECT_SENIOR_TITLE: 1})
 
     def test_serpapi_error_is_reported(self):
         engine.SEARCH_PROBLEMS.clear()
