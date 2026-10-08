@@ -148,7 +148,9 @@ MISSING_BUT_ACCEPTABLE_SKILLS = [
     "إحصاء",
 ]
 
-BAD_SIGNALS = [
+# Checked against the job TITLE only: descriptions often mention these
+# words for other people ("report to the manager", "work with data engineers").
+BAD_TITLE_SIGNALS = [
     "senior",
     "lead",
     "manager",
@@ -371,7 +373,7 @@ def hard_reject_reason(opportunity: Opportunity, full_text: str) -> str | None:
     if contains_any(full_text, STALE_SIGNALS):
         return "Not enough job details to confirm fit"
 
-    if contains_any(full_text, BAD_SIGNALS) or has_high_experience(full_text):
+    if contains_any(opportunity.title, BAD_TITLE_SIGNALS) or has_high_experience(full_text):
         return "May be too senior or outside target path"
 
     if is_hris_heavy_role(opportunity.title, full_text):
