@@ -52,6 +52,10 @@ YEAR_WORD = r"(?:years?|yrs?|سنوات|سنة|سنين|أعوام|عام)"
 RANGE_SEPARATOR = r"(?:-|–|to|إلى|الى|و)"
 YEARS_RANGE_PATTERN = re.compile(rf"(\d+)\s*{RANGE_SEPARATOR}\s*(\d+)\s*\+?\s*{YEAR_WORD}")
 SINGLE_YEARS_PATTERN = re.compile(rf"(\d+)\s*\+?\s*{YEAR_WORD}")
+# "Years of experience: 3-5", "سنوات الخبرة: 4" (number after a label, no "years" word)
+LABELED_EXPERIENCE_PATTERN = re.compile(
+    r"(?:years of experience|experience|سنوات الخبرة|الخبرة|خبرة)\s*[:：]\s*(\d+)"
+)
 EXPERIENCE_CONTEXT_PATTERN = re.compile(r"experience|\bexp\b|خبرة|خبره|minimum|at least|لا تقل|\+")
 EXPERIENCE_CONTEXT_WINDOW = 60
 
@@ -184,6 +188,7 @@ def is_aggregator_url(url: str) -> bool:
 
 def normalize_numbers(text: str) -> str:
     text = text.lower().translate(ARABIC_DIGITS)
+    text = re.sub(r"[()\[\]]", " ", text)  # "(3-5) years" -> " 3-5  years"
     return NUMBER_WORD_PATTERN.sub(lambda match: str(NUMBER_WORDS[match.group(1)]), text)
 
 
@@ -198,7 +203,7 @@ def required_experience_years(text: str) -> int | None:
     "1-3 years" -> 1, "3+ years" -> 3. If several are stated, the highest wins.
     """
     text = normalize_numbers(text)
-    minimums = []
+    minimums = [int(match.group(1)) for match in LABELED_EXPERIENCE_PATTERN.finditer(text)]
 
     for match in YEARS_RANGE_PATTERN.finditer(text):
         if is_experience_mention(text, match.start(), match.end()):

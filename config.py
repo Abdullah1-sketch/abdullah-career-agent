@@ -243,3 +243,67 @@ TOO_MANY_YEARS = 3
 
 # A posting this old (or older) is treated as stale.
 STALE_AFTER_MONTHS = 2
+
+
+# ============================================================
+# Job verification settings
+# Before a job can be "apply now", the bot opens the original posting
+# and checks it is open, the experience asked for and the skills listed.
+# ============================================================
+
+# Sites that repost jobs from elsewhere (not the employer's own posting).
+JOB_BOARD_DOMAINS = [
+    "jooble.org", "indeed.com", "bayt.com", "naukrigulf.com", "glassdoor.com",
+    "bebee.com", "trabajo.org", "learn4good.com", "wzzff.com", "jobleads.com",
+    "talent.com", "jobrapido.com", "directoryksa.com", "wazeftysa.com",
+    "tanqeeb.com", "ai-search.io", "gulftalent.com", "efinancialcareers",
+    "jobsora.com", "careerjet", "laimoon.com", "drjobpro.com", "akhtaboot.com",
+    "sabbar.com", "jobzmall.com", "whatjobs.com", "simplyhired",
+]
+
+# Hiring systems employers use for their own postings.
+ATS_DOMAINS = [
+    "greenhouse.io", "lever.co", "ashbyhq.com", "myworkdayjobs.com",
+    "workdayjobs.com", "oraclecloud.com", "successfactors", "smartrecruiters.com",
+    "bamboohr.com", "jobvite.com", "recruitee.com", "zohorecruit", "teamtailor.com",
+    "jadarat.sa", "taleo.net", "icims.com", "breezy.hr", "workable.com",
+]
+
+# Skills the bot looks for in a posting: display name -> words that mean it.
+SKILL_TERMS = {
+    "Excel": ["excel"],
+    "Power BI": ["power bi", "powerbi"],
+    "Power Query": ["power query"],
+    "Statistics": ["statistics", "statistical", "إحصاء"],
+    "SQL": ["sql"],
+    "Python": ["python", "بايثون"],
+    "R": ["r programming", "r language", "rstudio"],
+    "Tableau": ["tableau"],
+    "Looker": ["looker"],
+    "Qlik": ["qlik"],
+    "SAS": ["sas"],
+    "SPSS": ["spss"],
+    "Spark": ["spark", "pyspark"],
+    "Azure": ["azure"],
+    "AWS": ["aws"],
+    "Snowflake": ["snowflake"],
+    "SAP": ["sap erp", "sap s/4hana", "s/4hana", "sap bw", "sap hana", "sap analytics cloud"],
+    "ServiceNow": ["servicenow"],
+    "Salesforce": ["salesforce"],
+    "Oracle ERP": ["oracle ebs", "oracle erp", "oracle fusion", "oracle hcm"],
+    "Machine Learning": ["machine learning", "تعلم الآلة"],
+}
+
+ABDULLAH_HAS_SKILLS = ["Excel", "Power BI", "Power Query", "Statistics"]
+ABDULLAH_LEARNING_SKILLS = ["SQL"]
+
+# Jobs built around one of these systems need hands-on experience with it.
+PLATFORM_SKILLS = ["SAP", "ServiceNow", "Salesforce", "Oracle ERP"]
+
+# Points removed for skills the posting asks for and Abdullah doesn't have.
+MISSING_PLATFORM_PENALTY = 30
+MISSING_SKILL_PENALTY = 4
+MAX_MISSING_SKILLS_PENALTY = 12
+
+# A fetched page shorter than this is treated as "couldn't read the posting".
+MIN_PAGE_TEXT_LENGTH = 400

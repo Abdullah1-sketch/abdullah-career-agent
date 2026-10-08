@@ -190,6 +190,7 @@ def to_opportunity(job: dict) -> dict:
         "location": job.get("location", ""),
         "description": description,
         "url": choose_apply_link(job),
+        "apply_links": [option["link"] for option in job.get("apply_options", []) if option.get("link")],
         "source": f"Google Jobs (via {job.get('via', '').replace('via ', '')})",
         "is_real_job": True,
     }
