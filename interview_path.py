@@ -1,3 +1,6 @@
+from config import MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
+
+
 AGGREGATOR_DOMAINS = [
     "jooble.org",
     "indeed.com",
@@ -88,7 +91,13 @@ def recommend_interview_path(opportunity: dict, scoring: dict) -> dict:
 
     actions = []
 
-    if score >= 80 and not is_aggregator:
+    if score >= MEDIUM_SCORE and is_aggregator:
+        actions.append("Find the original posting on the company site and apply there")
+        actions.append("Apply on the job board if the company site has no posting")
+
+        path = "Find original posting"
+
+    elif score >= STRONG_SCORE and not is_aggregator:
         actions.append("Apply officially as soon as possible")
         actions.append("Prepare a personalized LinkedIn message")
 
@@ -97,7 +106,7 @@ def recommend_interview_path(opportunity: dict, scoring: dict) -> dict:
 
         path = "High-effort interview push"
 
-    elif score >= 60 and not is_aggregator:
+    elif score >= MEDIUM_SCORE and not is_aggregator:
         actions.append("Apply officially")
 
         if has_fast_apply_signal:
@@ -107,7 +116,7 @@ def recommend_interview_path(opportunity: dict, scoring: dict) -> dict:
 
         path = "Standard application"
 
-    elif score >= 45 and has_official_apply and not is_aggregator:
+    elif score >= WATCH_SCORE and has_official_apply and not is_aggregator:
         actions.append("Fast apply if it takes less than 5 minutes")
         actions.append("Do not customize heavily")
 

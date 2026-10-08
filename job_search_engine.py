@@ -1,9 +1,20 @@
 import os
 import re
+from datetime import date
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+
+from config import BAD_TITLE_SIGNALS, SEARCHES_PER_RUN
+from opportunity_scoring import (
+    CLOSED_POSTING_SIGNALS,
+    contains_any,
+    has_high_experience,
+    is_hris_heavy_role,
+    is_process_only_business_role,
+    is_stale_posting,
+)
 
 
 SERPAPI_URL = "https://serpapi.com/search.json"
@@ -24,6 +35,17 @@ SEARCH_QUERIES = [
     "site:jobs.ashbyhq.com Saudi Arabia Riyadh data analyst",
     "site:*.careers-page.com Riyadh \"Data Analyst\"",
     "site:*.careers-page.com Riyadh \"Business Intelligence\"",
+    # Eastern Province
+    "site:linkedin.com/jobs/view Dammam OR Khobar OR Dhahran \"Data Analyst\"",
+    "site:linkedin.com/jobs/view Dammam OR Khobar OR Dhahran \"BI Analyst\" OR \"Reporting Analyst\"",
+    # Qassim
+    "site:linkedin.com/jobs/view Qassim OR Buraydah OR Unaizah analyst data",
+    # Graduate programs, Tamheer and Arabic postings
+    "site:linkedin.com/jobs/view Saudi Arabia \"Graduate Development Program\" data",
+    "site:linkedin.com/jobs/view Saudi Arabia \"fresh graduate\" \"Data Analyst\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Tamheer data analysis",
+    "site:linkedin.com/jobs/view السعودية \"محلل بيانات\"",
+    "site:myworkdayjobs.com Saudi Arabia \"Data Analyst\"",
 ]
 
 TARGET_TITLE_TERMS = [
@@ -113,116 +135,14 @@ LOCATION_TERMS = [
     "الخبر",
     "الظهران",
     "qassim",
+    "buraydah",
+    "unaizah",
     "القصيم",
+    "بريدة",
+    "عنيزة",
     "saudi arabia",
     "ksa",
     "السعودية",
-]
-
-BAD_TERMS = [
-    "senior",
-    "lead",
-    "manager",
-    "director",
-    "principal",
-    "head of",
-    "5+",
-    "6+",
-    "7+",
-    "8+",
-    "10+",
-    "minimum of three years",
-    "minimum of 3 years",
-    "three years of experience",
-    "3 years of experience",
-    "3 years' experience",
-    "3+ years",
-    "3 years",
-    "minimum 3 years",
-    "at least 3 years",
-    "بين 3 إلى 10 سنوات",
-    "بين ٣ إلى ١٠ سنوات",
-    "3 إلى 10 سنوات",
-    "٣ إلى ١٠ سنوات",
-    "خبرة عملية تتراوح بين 3",
-    "خبرة عملية تتراوح بين ٣",
-    "خبرة تتراوح بين 3",
-    "خبرة تتراوح بين ٣",
-    "data engineer",
-    "data scientist",
-    "machine learning engineer",
-]
-
-STALE_TERMS = [
-    "posted 2 years ago",
-    "posted 1 year ago",
-    "posted a year ago",
-    "posted over",
-    "months ago",
-    "closed",
-    "expired",
-    "no longer accepting applications",
-    "لم يعد",
-    "منذ سنة",
-    "منذ سنتين",
-    "منذ أشهر",
-    "مغلق",
-    "منتهي",
-]
-
-HRIS_HEAVY_TERMS = [
-    "hris",
-    "oracle hcm",
-    "workday",
-    "sap successfactors",
-    "successfactors",
-    "gosi",
-    "qiwa",
-    "mudad",
-    "muqeem",
-    "absher",
-    "nitaqat",
-    "saudization",
-    "employee master data",
-    "hr data integrity",
-    "قوى",
-    "مدد",
-    "مقيم",
-    "أبشر",
-    "نطاقات",
-    "التأمينات",
-    "سعودة",
-]
-
-PROCESS_ONLY_TERMS = [
-    "business process documentation",
-    "process documentation",
-    "workflow diagrams",
-    "business process mapping",
-    "as-is",
-    "to-be",
-    "visio",
-    "mega",
-    "manuals",
-]
-
-STRONG_ANALYTICS_TERMS = [
-    "data analyst",
-    "bi analyst",
-    "business intelligence",
-    "reporting analyst",
-    "analytics analyst",
-    "hr analytics",
-    "dashboard",
-    "dashboards",
-    "power bi",
-    "sql",
-    "kpi",
-    "metrics",
-    "data visualization",
-    "محلل بيانات",
-    "ذكاء أعمال",
-    "تقارير",
 ]
 
 GENERIC_TITLE_TERMS = [
@@ -283,11 +203,6 @@ COMPANY_LABELS = {
 }
 
 
-def contains_any(text: str, terms: list[str]) -> bool:
-    text = text.lower()
-    return any(term.lower() in text for term in terms)
-
-
 def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
 
@@ -303,20 +218,6 @@ def get_domain(url: str) -> str:
 def is_aggregator_url(url: str) -> bool:
     domain = get_domain(url)
     return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
-
-
-def has_arabic_high_experience(text: str) -> bool:
-    text = text.lower()
-
-    patterns = [
-        r"بين\s*[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
-        r"تتراوح\s+بين\s*[٣3]",
-        r"خبرة\s+عملية\s+تتراوح\s+بين\s*[٣3]",
-        r"خبرة\s+تتراوح\s+بين\s*[٣3]",
-        r"[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
-    ]
-
-    return any(re.search(pattern, text) for pattern in patterns)
 
 
 def is_direct_job_url(url: str) -> bool:
@@ -346,33 +247,6 @@ def is_generic_search_result(title: str, url: str) -> bool:
         return True
 
     return False
-
-
-def is_stale_result(text: str) -> bool:
-    return contains_any(text, STALE_TERMS)
-
-
-def is_process_only_business_role(title: str, text: str) -> bool:
-    title_lower = title.lower()
-
-    if "business analyst" not in title_lower:
-        return False
-
-    has_process_only_terms = contains_any(text, PROCESS_ONLY_TERMS)
-    has_strong_analytics_terms = contains_any(text, STRONG_ANALYTICS_TERMS)
-
-    return has_process_only_terms and not has_strong_analytics_terms
-
-
-def is_hris_heavy_role(title: str, text: str) -> bool:
-    title_lower = title.lower()
-
-    is_hr_role = any(
-        term in title_lower
-        for term in ["hr data", "hr analytics", "people analytics", "workforce analytics"]
-    )
-
-    return is_hr_role and contains_any(text, HRIS_HEAVY_TERMS)
 
 
 def fetch_page_html(url: str) -> str:
@@ -449,6 +323,25 @@ def extract_original_job_url(url: str) -> str:
     return candidates[0]
 
 
+LINKEDIN_HIRING_TITLE = re.compile(r"^(?P<company>.+?) hiring (?P<title>.+?) in (?P<location>.+?)\s*\|\s*linkedin$", re.I)
+LINKEDIN_DASH_TITLE = re.compile(r"^(?P<title>.+?) - (?P<company>.+?) - linkedin$", re.I)
+
+
+def parse_linkedin_title(raw_title: str) -> tuple[str, str, str] | None:
+    """Split a LinkedIn search title into (job title, company, location)."""
+    raw_title = clean_text(raw_title)
+
+    match = LINKEDIN_HIRING_TITLE.match(raw_title)
+    if match:
+        return match["title"], match["company"], match["location"]
+
+    match = LINKEDIN_DASH_TITLE.match(raw_title)
+    if match:
+        return match["title"], match["company"], ""
+
+    return None
+
+
 def extract_company(title: str, url: str, snippet: str) -> str:
     text = f"{title} {snippet}".lower()
     domain = get_domain(url)
@@ -496,38 +389,28 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
     if is_generic_search_result(title, url):
         return False
 
-    if is_stale_result(combined):
+    if contains_any(title, BAD_TITLE_SIGNALS):
         return False
 
-    if contains_any(combined, BAD_TERMS):
-        return False
-
-    if has_arabic_high_experience(combined):
+    if is_stale_posting(combined) or has_high_experience(combined):
         return False
 
     has_target_title = contains_any(combined, TARGET_TITLE_TERMS)
     has_data_context = contains_any(combined, DATA_CONTEXT_TERMS)
     has_location = contains_any(combined, LOCATION_TERMS)
 
-    if not has_target_title:
+    if not (has_target_title and has_data_context and has_location):
         return False
 
-    if not has_data_context:
-        return False
-
-    if not has_location:
-        return False
-
+    # The job page can also list other jobs ("Similar jobs"), so only explicit
+    # closure and experience requirements are read from it, not titles or ages.
     page_text = fetch_page_text(url)
     full_text = f"{combined} {page_text}"
 
-    if is_stale_result(full_text):
+    if contains_any(page_text, CLOSED_POSTING_SIGNALS):
         return False
 
-    if contains_any(full_text, BAD_TERMS):
-        return False
-
-    if has_arabic_high_experience(full_text):
+    if has_high_experience(full_text):
         return False
 
     if is_hris_heavy_role(title, full_text):
@@ -548,10 +431,25 @@ def build_description(title: str, snippet: str) -> str:
     return text[:900]
 
 
+# Problems from the last search run (no key, quota used up...), shown in
+# the daily message so a quiet day isn't mistaken for "no jobs".
+SEARCH_PROBLEMS: list[str] = []
+
+
+def record_search_problem(problem: str) -> None:
+    if problem not in SEARCH_PROBLEMS:
+        SEARCH_PROBLEMS.append(problem)
+
+
+def get_search_problems() -> list[str]:
+    return list(SEARCH_PROBLEMS)
+
+
 def serpapi_search(query: str, limit: int = 5) -> list[dict]:
     api_key = os.getenv("SERPAPI_KEY")
 
     if not api_key:
+        record_search_problem("البحث في Google متوقف: مفتاح SERPAPI_KEY غير موجود في GitHub Secrets.")
         return []
 
     params = {
@@ -566,11 +464,14 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
 
     try:
         response = requests.get(SERPAPI_URL, params=params, timeout=25)
-        response.raise_for_status()
-    except requests.RequestException:
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        record_search_problem("تعذر الاتصال بـ SerpApi.")
         return []
 
-    data = response.json()
+    if data.get("error"):
+        record_search_problem(f"SerpApi: {data['error']}")
+        return []
     results = []
 
     for item in data.get("organic_results", []):
@@ -586,11 +487,17 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         if not final_url:
             continue
 
-        if not is_good_result(title, snippet, final_url):
+        company = ""
+        listed_location = ""
+        parsed_title = parse_linkedin_title(title) if "linkedin.com" in final_url else None
+        if parsed_title:
+            title, company, listed_location = parsed_title
+
+        if not is_good_result(title, f"{listed_location} {snippet}", final_url):
             continue
 
-        company = extract_company(title, final_url, snippet)
-        location = estimate_location(title, snippet)
+        company = company or extract_company(title, final_url, snippet)
+        location = estimate_location(listed_location, f"{title} {snippet}")
 
         results.append(
             {
@@ -618,10 +525,23 @@ def deduplicate(items: list[dict]) -> list[dict]:
     return list(unique.values())
 
 
+def choose_queries_for_day(day_number: int, per_run: int) -> list[str]:
+    """Rotate through the queries so each day searches a different slice.
+
+    Keeps paid search usage at `per_run` searches a day while still covering
+    every query every few days.
+    """
+    start = (day_number * per_run) % len(SEARCH_QUERIES)
+    rotated = SEARCH_QUERIES[start:] + SEARCH_QUERIES[:start]
+    return rotated[:per_run]
+
+
 def search_market_opportunities(limit: int = 8) -> list[dict]:
     all_results = []
+    SEARCH_PROBLEMS.clear()
+    queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
-    for query in SEARCH_QUERIES:
+    for query in queries:
         all_results.extend(serpapi_search(query, limit=5))
 
         if len(all_results) >= limit * 2:

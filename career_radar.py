@@ -1,9 +1,10 @@
 from opportunity_scoring import Opportunity, score_opportunity
 from interview_path import recommend_interview_path
+from config import MAX_APPLY_NOW_JOBS, MAX_QUICK_APPLY_JOBS, MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
-from job_search_engine import search_market_opportunities
+from job_search_engine import get_search_problems, search_market_opportunities
 from interview_strategy import build_interview_strategy
 
 
@@ -53,17 +54,6 @@ BLOCKED_REPORT_TERMS = [
     "اتصل بنا",
 ]
 
-BLOCKED_GENERIC_SOURCES = [
-    "jooble.org",
-    "indeed.com",
-    "bayt.com",
-    "naukrigulf.com",
-    "glassdoor.com",
-    "bebee.com",
-    "trabajo.org",
-    "learn4good.com",
-]
-
 BLOCKED_GENERIC_TITLE_TERMS = [
     "jobs in",
     "job vacancies",
@@ -97,14 +87,7 @@ def contains_blocked_report_term(item: dict) -> bool:
 
 def is_low_quality_item(item: dict) -> bool:
     title = item.get("title", "").lower()
-    company = item.get("company", "").lower()
     url = item.get("url", "").lower()
-
-    if contains_any(url, BLOCKED_GENERIC_SOURCES):
-        return True
-
-    if contains_any(company, BLOCKED_GENERIC_SOURCES):
-        return True
 
     if contains_any(title, BLOCKED_GENERIC_TITLE_TERMS):
         return True
@@ -143,6 +126,8 @@ def translate_reason(reason: str) -> str:
         "Has a clearer path to interview or outreach": "مسار التقديم واضح",
         "May be too senior or outside target path": "قد تكون أعلى من مستواك",
         "Not enough job details to confirm fit": "التفاصيل غير كافية",
+        "Posting looks old or closed": "الإعلان قديم أو مغلق",
+        "Posted on a job board: apply on the company site if possible": "منشورة في موقع وظائف: دوّرها في موقع الشركة وقدّم من هناك",
     }.get(reason, reason)
 
 
@@ -158,6 +143,8 @@ def translate_action(action: str) -> str:
         "Prepare a short LinkedIn message": "أرسل رسالة LinkedIn قصيرة",
         "Fast apply if it takes less than 5 minutes": "قدّم سريعًا إذا ما يأخذ أكثر من 5 دقائق",
         "Do not customize heavily": "لا تخصص لها وقت كثير",
+        "Find the original posting on the company site and apply there": "دوّر الإعلان في موقع الشركة وقدّم منه",
+        "Apply on the job board if the company site has no posting": "إذا ما لقيته، قدّم من موقع الوظائف",
     }.get(action, action)
 
 
@@ -222,13 +209,13 @@ def get_category(opportunity_data: dict, score: int) -> str:
     if opportunity_data.get("is_real_job") is False:
         return "⚪ راقب"
 
-    if score >= 80:
+    if score >= STRONG_SCORE:
         return "🟢 قدّم الآن"
 
-    if score >= 60:
+    if score >= MEDIUM_SCORE:
         return "🟡 قدّم سريع"
 
-    if score >= 45:
+    if score >= WATCH_SCORE:
         return "🟡 راقب"
 
     return "⚪ راقب"
@@ -262,7 +249,7 @@ def build_missing_items(opportunity_data: dict) -> str:
 def build_extra_push(opportunity_data: dict, score: int) -> str:
     city = estimate_city(opportunity_data)
 
-    if score < 80:
+    if score < STRONG_SCORE:
         return ""
 
     if city not in ["الرياض", "الشرقية", "القصيم"]:
@@ -371,6 +358,20 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
     return sorted(opportunities, key=sort_key)
 
 
+def build_quick_apply_line(opportunity_data: dict) -> str:
+    score = get_score(opportunity_data)
+    return (
+        f"- {translate_job_title(opportunity_data['title'])} | {opportunity_data['company']} | "
+        f"{estimate_city(opportunity_data)} | {score}/100\n  {opportunity_data['url']}"
+    )
+
+
+def build_quick_apply_list(opportunities: list[dict]) -> str:
+    lines = ["🟡 تستحق تقديم سريع (بدون تخصيص كبير):"]
+    lines.extend(build_quick_apply_line(item) for item in opportunities)
+    return "\n".join(lines)
+
+
 def build_no_opportunity_message() -> str:
     return """لا توجد فرصة قوية اليوم.
 
@@ -378,7 +379,18 @@ def build_no_opportunity_message() -> str:
 لا تضيع وقتك على تقديم ضعيف."""
 
 
+def add_search_warning(message: str) -> str:
+    problems = get_search_problems()
+    if not problems:
+        return message
+    return message + "\n\n⚠️ تنبيه: " + " ".join(problems)
+
+
 def build_daily_radar_message() -> str:
+    return add_search_warning(build_opportunities_message())
+
+
+def build_opportunities_message() -> str:
     opportunities = sort_opportunities(get_current_opportunities())
 
     apply_now = [
@@ -396,13 +408,16 @@ def build_daily_radar_message() -> str:
         if get_category(opportunity, get_score(opportunity)) == "🟡 راقب"
     ]
 
-    if apply_now:
-        sections = ["فرص اليوم:"]
-        sections.extend(build_opportunity_section(item) for item in apply_now[:2])
+    if apply_now or fast_apply:
+        sections = []
+        if apply_now:
+            sections.append("فرص اليوم:")
+            sections.extend(build_opportunity_section(item) for item in apply_now[:MAX_APPLY_NOW_JOBS])
+        else:
+            sections.append("لا توجد فرصة ذهبية اليوم.")
+        if fast_apply:
+            sections.append(build_quick_apply_list(fast_apply[:MAX_QUICK_APPLY_JOBS]))
         return "\n\n".join(sections)
-
-    if fast_apply:
-        return "لا توجد فرصة ذهبية اليوم.\n\nلكن هذه تستحق تقديم سريع:\n\n" + build_opportunity_section(fast_apply[0])
 
     if early_signals:
         return "لا توجد فرصة قوية اليوم.\n\nإشارة للمراقبة فقط:\n\n" + build_opportunity_section(early_signals[0])

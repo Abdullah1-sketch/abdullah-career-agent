@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from company_career_links import COMPANY_CAREER_TARGETS
+from opportunity_scoring import contains_any
 
 
 JOB_TITLE_KEYWORDS = [
@@ -192,11 +193,6 @@ HEADERS = {
 
 def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
-
-
-def contains_any(text: str, keywords: list[str]) -> bool:
-    text = text.lower()
-    return any(keyword.lower() in text for keyword in keywords)
 
 
 def is_valid_url(url: str) -> bool:
