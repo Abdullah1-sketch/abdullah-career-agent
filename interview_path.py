@@ -88,7 +88,13 @@ def recommend_interview_path(opportunity: dict, scoring: dict) -> dict:
 
     actions = []
 
-    if score >= 80 and not is_aggregator:
+    if score >= 60 and is_aggregator:
+        actions.append("Find the original posting on the company site and apply there")
+        actions.append("Apply on the job board if the company site has no posting")
+
+        path = "Find original posting"
+
+    elif score >= 80 and not is_aggregator:
         actions.append("Apply officially as soon as possible")
         actions.append("Prepare a personalized LinkedIn message")
 

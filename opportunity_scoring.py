@@ -386,9 +386,6 @@ def score_location(text: str) -> tuple[int, str | None]:
 
 
 def hard_reject_reason(opportunity: Opportunity, full_text: str) -> str | None:
-    if opportunity.url and is_aggregator_url(opportunity.url):
-        return "Not enough job details to confirm fit"
-
     if contains_any(full_text, STALE_SIGNALS):
         return "Not enough job details to confirm fit"
 
@@ -466,7 +463,10 @@ def score_opportunity(opportunity: Opportunity) -> dict:
         score += location_score
         add_reason(reasons, location_reason)
 
-    if contains_any(full_text, INTERVIEW_PATH_SIGNALS):
+    if opportunity.url and is_aggregator_url(opportunity.url):
+        score -= 5
+        add_reason(reasons, "Posted on a job board: apply on the company site if possible")
+    elif contains_any(full_text, INTERVIEW_PATH_SIGNALS):
         score += 8
         add_reason(reasons, "Has a clearer path to interview or outreach")
 

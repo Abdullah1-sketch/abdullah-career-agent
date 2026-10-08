@@ -1,8 +1,11 @@
 import unittest
 
+from career_radar import is_low_quality_item
+from interview_path import recommend_interview_path
 from opportunity_scoring import Opportunity, score_opportunity
 
 SENIOR_REASON = "May be too senior or outside target path"
+AGGREGATOR_REASON = "Posted on a job board: apply on the company site if possible"
 
 
 def make_job(title="Data Analyst", description="", location="Riyadh, Saudi Arabia",
@@ -70,6 +73,33 @@ class ExperienceRangeTests(unittest.TestCase):
 
     def test_years_unrelated_to_experience_are_ignored(self):
         self.assert_not_too_experienced("Join a company growing for 10 years in Riyadh. Excel reporting.")
+
+
+class AggregatorLinkTests(unittest.TestCase):
+    JOB_BOARD_URL = "https://www.bayt.com/en/saudi-arabia/jobs/junior-data-analyst-4812345/"
+
+    def test_job_board_link_is_scored_not_rejected(self):
+        result = score(
+            title="Junior Data Analyst",
+            description="Fresh graduates. Excel, Power BI dashboards and SQL.",
+            url=self.JOB_BOARD_URL,
+        )
+        self.assertGreaterEqual(result["score"], 60)
+        self.assertIn(AGGREGATOR_REASON, result["reasons"])
+
+    def test_job_board_item_passes_daily_report_filter(self):
+        item = {"title": "Junior Data Analyst", "company": "Example Co", "url": self.JOB_BOARD_URL}
+        self.assertFalse(is_low_quality_item(item))
+
+    def test_job_board_listing_page_is_still_filtered(self):
+        item = {"title": "Data Analyst jobs in Riyadh", "company": "Bayt",
+                "url": "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-jobs-in-riyadh/"}
+        self.assertTrue(is_low_quality_item(item))
+
+    def test_good_job_board_match_gets_find_original_action(self):
+        opportunity = {"title": "Junior Data Analyst", "url": self.JOB_BOARD_URL}
+        path = recommend_interview_path(opportunity, {"score": 82, "priority": "Strong"})
+        self.assertIn("Find the original posting on the company site and apply there", path["actions"])
 
 
 if __name__ == "__main__":

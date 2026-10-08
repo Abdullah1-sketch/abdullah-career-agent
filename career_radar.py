@@ -53,17 +53,6 @@ BLOCKED_REPORT_TERMS = [
     "اتصل بنا",
 ]
 
-BLOCKED_GENERIC_SOURCES = [
-    "jooble.org",
-    "indeed.com",
-    "bayt.com",
-    "naukrigulf.com",
-    "glassdoor.com",
-    "bebee.com",
-    "trabajo.org",
-    "learn4good.com",
-]
-
 BLOCKED_GENERIC_TITLE_TERMS = [
     "jobs in",
     "job vacancies",
@@ -97,14 +86,7 @@ def contains_blocked_report_term(item: dict) -> bool:
 
 def is_low_quality_item(item: dict) -> bool:
     title = item.get("title", "").lower()
-    company = item.get("company", "").lower()
     url = item.get("url", "").lower()
-
-    if contains_any(url, BLOCKED_GENERIC_SOURCES):
-        return True
-
-    if contains_any(company, BLOCKED_GENERIC_SOURCES):
-        return True
 
     if contains_any(title, BLOCKED_GENERIC_TITLE_TERMS):
         return True
@@ -143,6 +125,7 @@ def translate_reason(reason: str) -> str:
         "Has a clearer path to interview or outreach": "مسار التقديم واضح",
         "May be too senior or outside target path": "قد تكون أعلى من مستواك",
         "Not enough job details to confirm fit": "التفاصيل غير كافية",
+        "Posted on a job board: apply on the company site if possible": "منشورة في موقع وظائف: دوّرها في موقع الشركة وقدّم من هناك",
     }.get(reason, reason)
 
 
@@ -158,6 +141,8 @@ def translate_action(action: str) -> str:
         "Prepare a short LinkedIn message": "أرسل رسالة LinkedIn قصيرة",
         "Fast apply if it takes less than 5 minutes": "قدّم سريعًا إذا ما يأخذ أكثر من 5 دقائق",
         "Do not customize heavily": "لا تخصص لها وقت كثير",
+        "Find the original posting on the company site and apply there": "دوّر الإعلان في موقع الشركة وقدّم منه",
+        "Apply on the job board if the company site has no posting": "إذا ما لقيته، قدّم من موقع الوظائف",
     }.get(action, action)
 
 
