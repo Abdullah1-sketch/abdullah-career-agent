@@ -1,12 +1,12 @@
 import os
 import re
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
+from bs4 import BeautifulSoup
 
 
 SERPAPI_URL = "https://serpapi.com/search.json"
-
 
 SEARCH_QUERIES = [
     "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Data Analyst\" \"0-2\"",
@@ -22,6 +22,8 @@ SEARCH_QUERIES = [
     "site:jobs.lever.co Saudi Arabia Riyadh data analyst",
     "site:boards.greenhouse.io Saudi Arabia Riyadh data analyst",
     "site:jobs.ashbyhq.com Saudi Arabia Riyadh data analyst",
+    "site:*.careers-page.com Riyadh \"Data Analyst\"",
+    "site:*.careers-page.com Riyadh \"Business Intelligence\"",
 ]
 
 TARGET_TITLE_TERMS = [
@@ -54,6 +56,7 @@ DATA_CONTEXT_TERMS = [
     "bi",
     "reporting",
     "dashboard",
+    "dashboards",
     "power bi",
     "sql",
     "excel",
@@ -69,6 +72,23 @@ DATA_CONTEXT_TERMS = [
     "لوحات",
     "مؤشرات",
     "إحصاء",
+]
+
+ENTRY_TERMS = [
+    "junior",
+    "entry level",
+    "fresh graduate",
+    "graduate",
+    "tamheer",
+    "intern",
+    "trainee",
+    "0-1",
+    "0-2",
+    "0-3",
+    "حديث تخرج",
+    "خريج",
+    "تمهير",
+    "تدريب",
 ]
 
 LOCATION_TERMS = [
@@ -94,10 +114,16 @@ BAD_TERMS = [
     "8+",
     "10+",
     "minimum of three years",
+    "minimum of 3 years",
     "three years of experience",
+    "3 years of experience",
+    "3 years' experience",
     "3+ years",
     "3 years",
     "minimum 3 years",
+    "at least 3 years",
+    "٣ سنوات",
+    "ثلاث سنوات",
     "data engineer",
     "data scientist",
     "machine learning engineer",
@@ -107,17 +133,41 @@ STALE_TERMS = [
     "posted 2 years ago",
     "posted 1 year ago",
     "posted a year ago",
-    "2 years ago",
-    "1 year ago",
-    "a year ago",
-    "years ago",
-    "year ago",
+    "posted over",
     "months ago",
     "closed",
     "expired",
     "no longer accepting applications",
-    "لم يعد التقديم متاح",
-    "انتهى التقديم",
+    "لم يعد",
+    "منذ سنة",
+    "منذ سنتين",
+    "منذ أشهر",
+    "مغلق",
+    "منتهي",
+]
+
+HRIS_HEAVY_TERMS = [
+    "hris",
+    "oracle hcm",
+    "workday",
+    "sap successfactors",
+    "successfactors",
+    "gosi",
+    "qiwa",
+    "mudad",
+    "muqeem",
+    "absher",
+    "nitaqat",
+    "saudization",
+    "employee master data",
+    "hr data integrity",
+    "قوى",
+    "مدد",
+    "مقيم",
+    "أبشر",
+    "نطاقات",
+    "التأمينات",
+    "سعودة",
 ]
 
 PROCESS_ONLY_TERMS = [
@@ -125,7 +175,6 @@ PROCESS_ONLY_TERMS = [
     "process documentation",
     "workflow diagrams",
     "business process mapping",
-    "process mapping",
     "as-is",
     "to-be",
     "visio",
@@ -148,7 +197,7 @@ STRONG_ANALYTICS_TERMS = [
     "metrics",
     "data visualization",
     "محلل بيانات",
-    "ذكاء الأعمال",
+    "ذكاء أعمال",
     "تقارير",
 ]
 
@@ -164,7 +213,7 @@ GENERIC_TITLE_TERMS = [
     "فرص عمل",
 ]
 
-BLOCKED_DOMAINS = [
+AGGREGATOR_DOMAINS = [
     "jooble.org",
     "indeed.com",
     "bayt.com",
@@ -172,6 +221,7 @@ BLOCKED_DOMAINS = [
     "glassdoor.com",
     "bebee.com",
     "trabajo.org",
+    "learn4good.com",
 ]
 
 BLOCKED_URL_PARTS = [
@@ -197,12 +247,14 @@ DIRECT_JOB_URL_HINTS = [
     "smartrecruiters",
     "sabbar.com",
     "careers.stc.com.sa",
+    "careers-page.com",
 ]
 
 COMPANY_LABELS = {
     "stc": "stc (إس تي سي – اتصالات وتقنية)",
     "sabbar": "Sabbar (صبار – منصة توظيف)",
     "linkedin": "LinkedIn (لينكدإن – منصة وظائف وتواصل مهني)",
+    "sgr": "Saudi Gold Refinery (مصفاة الذهب السعودية – تعدين ومعادن ثمينة)",
 }
 
 
@@ -219,15 +271,19 @@ def normalize_url(url: str) -> str:
     return (url or "").split("?")[0].rstrip("/")
 
 
-def is_blocked_domain(url: str) -> bool:
-    domain = urlparse(url).netloc.lower().replace("www.", "")
-    return any(blocked in domain for blocked in BLOCKED_DOMAINS)
+def get_domain(url: str) -> str:
+    return urlparse(url).netloc.lower().replace("www.", "")
+
+
+def is_aggregator_url(url: str) -> bool:
+    domain = get_domain(url)
+    return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
 
 
 def is_direct_job_url(url: str) -> bool:
     lower_url = url.lower()
 
-    if is_blocked_domain(lower_url):
+    if is_aggregator_url(lower_url):
         return False
 
     if contains_any(lower_url, BLOCKED_URL_PARTS):
@@ -269,23 +325,97 @@ def is_process_only_business_role(title: str, text: str) -> bool:
     return has_process_only_terms and not has_strong_analytics_terms
 
 
-def fetch_page_text(url: str) -> str:
+def is_hris_heavy_role(title: str, text: str) -> bool:
+    title_lower = title.lower()
+
+    is_hr_role = any(
+        term in title_lower
+        for term in ["hr data", "hr analytics", "people analytics", "workforce analytics"]
+    )
+
+    if not is_hr_role:
+        return False
+
+    return contains_any(text, HRIS_HEAVY_TERMS)
+
+
+def fetch_page_html(url: str) -> str:
     try:
         response = requests.get(
             url,
             timeout=15,
-            headers={"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/0.8"},
+            headers={"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/1.0"},
         )
         response.raise_for_status()
     except requests.RequestException:
         return ""
 
-    return clean_text(response.text[:6000]).lower()
+    return response.text
+
+
+def fetch_page_text(url: str) -> str:
+    html = fetch_page_html(url)
+
+    if not html:
+        return ""
+
+    soup = BeautifulSoup(html, "html.parser")
+    return clean_text(soup.get_text(" ")[:8000]).lower()
+
+
+def extract_original_job_url(url: str) -> str:
+    if is_direct_job_url(url):
+        return normalize_url(url)
+
+    if not is_aggregator_url(url):
+        return ""
+
+    html = fetch_page_html(url)
+
+    if not html:
+        return ""
+
+    soup = BeautifulSoup(html, "html.parser")
+    candidates = []
+
+    for link in soup.find_all("a"):
+        href = link.get("href")
+
+        if not href:
+            continue
+
+        full_url = urljoin(url, href)
+
+        if is_direct_job_url(full_url):
+            candidates.append(normalize_url(full_url))
+
+    if not candidates:
+        return ""
+
+    platform_priority = [
+        "careers-page.com",
+        "careers.stc.com.sa",
+        "linkedin.com/jobs/view",
+        "greenhouse.io",
+        "lever.co",
+        "ashbyhq.com",
+        "workdayjobs.com",
+        "oraclecloud.com",
+        "successfactors",
+        "smartrecruiters",
+    ]
+
+    for platform in platform_priority:
+        for candidate in candidates:
+            if platform in candidate.lower():
+                return candidate
+
+    return candidates[0]
 
 
 def extract_company(title: str, url: str, snippet: str) -> str:
     text = f"{title} {snippet}".lower()
-    domain = urlparse(url).netloc.lower().replace("www.", "")
+    domain = get_domain(url)
 
     if "stc" in text or "careers.stc.com.sa" in domain:
         return COMPANY_LABELS["stc"]
@@ -295,6 +425,9 @@ def extract_company(title: str, url: str, snippet: str) -> str:
 
     if "linkedin.com" in domain:
         return COMPANY_LABELS["linkedin"]
+
+    if domain.startswith("sgr.") or "saudi gold refinery" in text:
+        return COMPANY_LABELS["sgr"]
 
     parts = domain.split(".")
     if parts:
@@ -355,6 +488,9 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
     if contains_any(full_text, BAD_TERMS):
         return False
 
+    if is_hris_heavy_role(title, full_text):
+        return False
+
     if is_process_only_business_role(title, full_text):
         return False
 
@@ -398,15 +534,20 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
     for item in data.get("organic_results", []):
         title = clean_text(item.get("title", ""))
         snippet = clean_text(item.get("snippet", ""))
-        url = item.get("link", "")
+        raw_url = item.get("link", "")
 
-        if not title or not url:
+        if not title or not raw_url:
             continue
 
-        if not is_good_result(title, snippet, url):
+        final_url = extract_original_job_url(raw_url)
+
+        if not final_url:
             continue
 
-        company = extract_company(title, url, snippet)
+        if not is_good_result(title, snippet, final_url):
+            continue
+
+        company = extract_company(title, final_url, snippet)
         location = estimate_location(title, snippet)
 
         results.append(
@@ -415,7 +556,7 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
                 "company": company,
                 "location": location,
                 "description": build_description(title, snippet),
-                "url": normalize_url(url),
+                "url": normalize_url(final_url),
                 "source": "SerpApi Google Search",
                 "category": "🟢 قدّم الآن",
                 "is_real_job": True,
