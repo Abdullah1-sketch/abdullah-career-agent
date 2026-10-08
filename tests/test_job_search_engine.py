@@ -97,6 +97,33 @@ class SerpApiSearchTests(unittest.TestCase):
             engine.serpapi_search("any query")
         self.assertTrue(any("SERPAPI_KEY" in problem for problem in engine.get_search_problems()))
 
+    def run_with_get(self, get_mock):
+        engine.SEARCH_PROBLEMS.clear()
+        with patch.dict("os.environ", {"SERPAPI_KEY": "secret-key-123"}), \
+                patch.object(engine.requests, "get", get_mock):
+            engine.serpapi_search("any query")
+        return " ".join(engine.get_search_problems())
+
+    def test_timeout_reason_is_reported_without_the_key(self):
+        def raise_timeout(*args, **kwargs):
+            raise engine.requests.Timeout(
+                "Read timed out: https://serpapi.com/search.json?api_key=secret-key-123"
+            )
+        problems = self.run_with_get(raise_timeout)
+        self.assertIn("Timeout", problems)
+        self.assertNotIn("secret-key-123", problems)
+
+    def test_non_json_reply_reports_status_code(self):
+        class HtmlResponse:
+            status_code = 502
+            text = "<html>Bad Gateway</html>"
+
+            def json(self):
+                raise ValueError("not json")
+
+        problems = self.run_with_get(lambda *args, **kwargs: HtmlResponse())
+        self.assertIn("502", problems)
+
 
 class QueryPlanTests(unittest.TestCase):
     def test_each_run_uses_a_limited_number_of_queries(self):
