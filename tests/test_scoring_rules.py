@@ -139,5 +139,21 @@ class StaleJobTests(unittest.TestCase):
         self.assertEqual(result["reasons"], ["Posting looks old or closed"])
 
 
+class GraduateProgramTests(unittest.TestCase):
+    def test_data_graduate_program_is_strong(self):
+        result = score(
+            title="Graduate Development Program - Data & Analytics",
+            description="12-month program for fresh graduates. Rotations in reporting and BI. Excel, Power BI.",
+        )
+        self.assertGreaterEqual(result["score"], 80, result)
+
+    def test_data_analytics_intern_is_strong(self):
+        result = score(
+            title="Data Analytics Intern",
+            description="Open to fresh graduates. Excel reporting and Power BI dashboards.",
+        )
+        self.assertGreaterEqual(result["score"], 80, result)
+
+
 if __name__ == "__main__":
     unittest.main()
