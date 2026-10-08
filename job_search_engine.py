@@ -8,7 +8,7 @@ one SerpApi credit and returns up to 10 jobs.
 import os
 from collections import Counter
 from datetime import date
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 
@@ -165,9 +165,20 @@ def is_aggregator_url(url: str) -> bool:
     return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
 
 
+def clean_link(url: str) -> str:
+    """Drop tracking parameters (utm_...) so links are short and comparable."""
+    parts = urlparse(url)
+    query = [(key, value) for key, value in parse_qsl(parts.query) if not key.startswith("utm_")]
+    return urlunparse(parts._replace(query=urlencode(query)))
+
+
+def get_apply_links(job: dict) -> list[str]:
+    return [clean_link(option["link"]) for option in job.get("apply_options", []) if option.get("link")]
+
+
 def choose_apply_link(job: dict) -> str:
     """Company site first, then LinkedIn, then job boards, then the Google listing."""
-    links = [option.get("link", "") for option in job.get("apply_options", []) if option.get("link")]
+    links = get_apply_links(job)
 
     company_sites = [link for link in links if not is_aggregator_url(link) and "linkedin.com" not in link]
     linkedin = [link for link in links if "linkedin.com" in link]
@@ -190,7 +201,8 @@ def to_opportunity(job: dict) -> dict:
         "location": job.get("location", ""),
         "description": description,
         "url": choose_apply_link(job),
-        "apply_links": [option["link"] for option in job.get("apply_options", []) if option.get("link")],
+        "apply_links": get_apply_links(job),
+        "posted_at": posted_at or "",
         "source": f"Google Jobs (via {job.get('via', '').replace('via ', '')})",
         "is_real_job": True,
     }

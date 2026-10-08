@@ -76,6 +76,14 @@ class JobConversionTests(unittest.TestCase):
         job = engine.to_opportunity(google_job(apply_links=links))
         self.assertEqual(job["apply_links"], list(links))
 
+    def test_posted_at_is_kept_and_tracking_is_removed(self):
+        job = engine.to_opportunity(google_job(apply_links=(
+            "https://careers.riyadhpay.sa/jobs/1?lang=en&utm_campaign=google_jobs_apply&utm_source=google_jobs_apply",
+        )))
+        self.assertEqual(job["posted_at"], "3 days ago")
+        self.assertEqual(job["url"], "https://careers.riyadhpay.sa/jobs/1?lang=en")
+        self.assertEqual(job["apply_links"], ["https://careers.riyadhpay.sa/jobs/1?lang=en"])
+
     def test_company_site_link_is_preferred(self):
         job = engine.to_opportunity(google_job(apply_links=(
             "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/",

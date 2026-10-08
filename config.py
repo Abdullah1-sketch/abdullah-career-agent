@@ -307,3 +307,59 @@ MAX_MISSING_SKILLS_PENALTY = 12
 
 # A fetched page shorter than this is treated as "couldn't read the posting".
 MIN_PAGE_TEXT_LENGTH = 400
+
+
+# ============================================================
+# Fit score (how well a job matches Abdullah), kept separate from
+# reliability (how sure we are the posting is real and open).
+# ============================================================
+
+# Abdullah's work experience in years (non-data role, 04/2022-05/2023).
+ABDULLAH_EXPERIENCE_YEARS = 1
+
+# Maximum points per part; they add up to 100.
+FIT_WEIGHTS = {"role": 35, "experience": 25, "skills": 30, "location": 10}
+
+# Role points as a share of FIT_WEIGHTS["role"].
+ROLE_SHARE = {"data": 1.0, "adjacent": 0.75, "finance": 0.3, "specialty": 0.3, "other": 0.0}
+
+# A required skill he is still learning counts this much of a mastered one.
+LEARNING_SKILL_CREDIT = 0.4
+
+# Highest score allowed when something is missing or not known.
+FIT_CAPS = {
+    "missing_platform": 55,     # job built on SAP / ServiceNow / ...
+    "role_not_data": 60,        # finance or other specialty
+    "experience_unmet": 75,     # asks for more years than he has
+    "missing_skill": 85,        # a listed tool he doesn't know
+    "learning_skill": 90,       # a listed tool he is still learning (SQL)
+    "unknown_details": 95,      # experience or tools not stated
+}
+
+# Title words for jobs that are mainly finance, not data analysis.
+FINANCE_TITLE_SIGNALS = [
+    "fp&a", "fpa", "financial", "finance", "accounting", "accountant", "valuation",
+    "audit", "treasury", "controller", "control", "tax", "credit", "investment",
+    "budget", "actuarial", "مالي", "مالية", "محاسب", "مراجع", "ميزانية", "ائتمان",
+]
+
+# Title words for analyst jobs in another specialty (need other skills).
+SPECIALTY_TITLE_SIGNALS = [
+    "gis", "geospatial", "sales", "marketing", "procurement", "supply chain",
+    "logistics", "clinical", "medical", "legal", "cyber", "security", "network",
+    "drilling", "reservoir", "engineer", "engineering", "مبيعات", "تسويق", "مشتريات",
+]
+
+# Words on an employer page that show applications are being accepted.
+APPLY_OPEN_SIGNALS = [
+    "apply now", "apply for this job", "apply for this position", "apply to this job",
+    "submit application", "submit your application", "start application", "start your application",
+    "قدم الآن", "قدّم الآن", "تقدم الآن", "التقديم على الوظيفة", "تقديم الطلب", "قدم على الوظيفة",
+]
+
+# Postings older than this are dropped unless an open application was confirmed.
+MAX_UNCONFIRMED_POSTING_AGE_DAYS = 30
+# A date inside the link (e.g. "...-20250221") older than this means an old posting.
+MAX_LINK_DATE_AGE_DAYS = 60
+# A LinkedIn posting newer than this counts as medium reliability.
+FRESH_LINKEDIN_DAYS = 14

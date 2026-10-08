@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 import job_verification as verification
@@ -16,6 +17,7 @@ def job(url, description="Excel and Power BI reporting.", company="Riyadh Pay", 
 
 
 LONG_TEXT = " Build Excel and Power BI dashboards for the finance team." * 12
+APPLY = " Apply now."
 
 
 def fake_pages(pages: dict):
@@ -44,10 +46,10 @@ class SourceTests(unittest.TestCase):
 class VerifyTests(unittest.TestCase):
     def test_open_company_posting_is_verified(self):
         url = "https://boards.greenhouse.io/riyadhpay/jobs/1"
-        with fake_pages({url: ("1-2 years of experience." + LONG_TEXT, [])}):
+        with fake_pages({url: ("1-2 years of experience." + LONG_TEXT + APPLY, [])}):
             result = verification.verify_job(job(url))
         self.assertTrue(result["verified"])
-        self.assertEqual(result["status"], "open")
+        self.assertEqual(result["status"], "open_confirmed")
         self.assertEqual(result["experience_years"], 1)
         self.assertEqual(result["source_url"], url)
 
@@ -67,7 +69,7 @@ class VerifyTests(unittest.TestCase):
     def test_job_board_leads_to_original_posting(self):
         board = "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/"
         original = "https://boards.greenhouse.io/riyadhpay/jobs/1"
-        pages = {board: ("Apply on company site", [original]), original: (LONG_TEXT, [])}
+        pages = {board: ("Apply on company site", [original]), original: (LONG_TEXT + APPLY, [])}
         with fake_pages(pages):
             result = verification.verify_job(job(board))
         self.assertTrue(result["verified"])
@@ -77,7 +79,7 @@ class VerifyTests(unittest.TestCase):
     def test_company_link_among_apply_options_is_used(self):
         board = "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/"
         original = "https://careers.riyadhpay.sa/jobs/1"
-        with fake_pages({original: (LONG_TEXT, [])}):
+        with fake_pages({original: (LONG_TEXT + APPLY, [])}):
             result = verification.verify_job(job(board, apply_links=[board, original]))
         self.assertEqual(result["source_url"], original)
         self.assertTrue(result["verified"])
@@ -97,6 +99,20 @@ class VerifyTests(unittest.TestCase):
         self.assertEqual(result["source_url"], first)
         self.assertEqual(result["experience_years"], 1)
 
+    def test_official_page_without_apply_button_is_only_seen(self):
+        url = "https://www.pepsicojobs.com/main/jobs/466519"
+        with fake_pages({url: (LONG_TEXT, [])}):
+            result = verification.verify_job(job(url, company="PepsiCo"))
+        self.assertEqual(result["source"], "company")
+        self.assertEqual(result["status"], "page_seen")
+        self.assertFalse(result["verified"])
+
+    def test_check_time_is_recorded(self):
+        url = "https://boards.greenhouse.io/riyadhpay/jobs/1"
+        with fake_pages({url: (LONG_TEXT + APPLY, [])}):
+            result = verification.verify_job(job(url))
+        self.assertRegex(result["checked_at"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+
     def test_page_that_cannot_be_opened(self):
         url = "https://careers.riyadhpay.sa/jobs/1"
         with fake_pages({}):
@@ -111,6 +127,45 @@ class VerifyTests(unittest.TestCase):
         fetch.assert_not_called()
         self.assertEqual(result["source"], "linkedin")
         self.assertFalse(result["verified"])
+
+
+class PostingDateTests(unittest.TestCase):
+    TODAY = date(2026, 10, 8)
+
+    def test_google_posted_at_values(self):
+        cases = {"3 days ago": 3, "an hour ago": 0, "30+ days ago": 30, "a month ago": 30,
+                 "2 weeks ago": 14, "منذ 5 أيام": 5}
+        for text, days in cases.items():
+            with self.subTest(text):
+                self.assertEqual(verification.posted_age_days(text), days)
+
+    def test_unknown_posted_at(self):
+        self.assertIsNone(verification.posted_age_days(""))
+
+    def test_old_date_inside_link(self):
+        url = "https://ai-search.io/job-board/accenture-data-ai-analyst-riyadh-sa-20250221"
+        self.assertEqual(verification.link_date_age_days(url, today=self.TODAY), 594)
+        self.assertIsNone(verification.link_date_age_days("https://x.sa/jobs/4012345678", today=self.TODAY))
+
+    def test_old_unconfirmed_posting_is_excluded(self):
+        result = {"status": "unknown", "source": "job_board"}
+        self.assertTrue(verification.is_old_and_unconfirmed(result, posted_days=45, link_days=None))
+        self.assertTrue(verification.is_old_and_unconfirmed(result, posted_days=None, link_days=594))
+        self.assertFalse(verification.is_old_and_unconfirmed(result, posted_days=3, link_days=None))
+        confirmed = {"status": "open_confirmed", "source": "company"}
+        self.assertFalse(verification.is_old_and_unconfirmed(confirmed, posted_days=45, link_days=None))
+
+
+class ReliabilityTests(unittest.TestCase):
+    def level(self, source, status, posted_days=None):
+        return verification.reliability({"source": source, "status": status}, posted_days)[0]
+
+    def test_levels(self):
+        self.assertEqual(self.level("company", "open_confirmed"), "high")
+        self.assertEqual(self.level("company", "page_seen"), "medium")
+        self.assertEqual(self.level("linkedin", "unknown", posted_days=3), "medium")
+        self.assertEqual(self.level("linkedin", "unknown", posted_days=None), "low")
+        self.assertEqual(self.level("job_board", "unknown", posted_days=1), "low")
 
 
 class RequirementTests(unittest.TestCase):
