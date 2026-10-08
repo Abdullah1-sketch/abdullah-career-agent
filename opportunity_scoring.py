@@ -180,6 +180,14 @@ HIGH_EXPERIENCE_SIGNALS = [
     "3 years of experience",
     "three years of experience",
     "3 years' experience",
+    "بين 3 إلى 10 سنوات",
+    "بين ٣ إلى ١٠ سنوات",
+    "3 إلى 10 سنوات",
+    "٣ إلى ١٠ سنوات",
+    "خبرة عملية تتراوح بين 3",
+    "خبرة عملية تتراوح بين ٣",
+    "خبرة تتراوح بين 3",
+    "خبرة تتراوح بين ٣",
     "٣ سنوات",
     "ثلاث سنوات",
 ]
@@ -244,6 +252,7 @@ AGGREGATOR_DOMAINS = [
     "bebee.com",
     "trabajo.org",
     "learn4good.com",
+    "wzzff.com",
 ]
 
 INTERVIEW_PATH_SIGNALS = [
@@ -297,11 +306,21 @@ def is_aggregator_url(url: str) -> bool:
 
 
 def has_high_experience(text: str) -> bool:
+    text = text.lower()
+
     if contains_any(text, HIGH_EXPERIENCE_SIGNALS):
         return True
 
-    pattern = r"(?<!0-)\b([3-9]|10)\s*\+?\s*(years|yrs|سنوات)\b"
-    return re.search(pattern, text.lower()) is not None
+    patterns = [
+        r"(?<!0-)\b([3-9]|10)\s*\+?\s*(years|yrs)\b",
+        r"بين\s*[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
+        r"تتراوح\s+بين\s*[٣3]",
+        r"خبرة\s+عملية\s+تتراوح\s+بين\s*[٣3]",
+        r"خبرة\s+تتراوح\s+بين\s*[٣3]",
+        r"[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
+    ]
+
+    return any(re.search(pattern, text) for pattern in patterns)
 
 
 def is_hris_heavy_role(title: str, text: str) -> bool:
