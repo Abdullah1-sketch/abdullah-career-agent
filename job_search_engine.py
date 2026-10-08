@@ -464,9 +464,15 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
 
     try:
         response = requests.get(SERPAPI_URL, params=params, timeout=25)
+    except requests.RequestException as error:
+        reason = str(error).replace(api_key, "***")[:150]
+        record_search_problem(f"تعذر الاتصال بـ SerpApi ({type(error).__name__}: {reason}).")
+        return []
+
+    try:
         data = response.json()
-    except (requests.RequestException, ValueError):
-        record_search_problem("تعذر الاتصال بـ SerpApi.")
+    except ValueError:
+        record_search_problem(f"رد SerpApi غير مفهوم (HTTP {response.status_code}).")
         return []
 
     if data.get("error"):
