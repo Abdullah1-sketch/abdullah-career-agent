@@ -174,6 +174,24 @@ class SerpApiSearchTests(unittest.TestCase):
         self.assertTrue(captured)
         self.assertTrue(all(params["num"] == 10 for params in captured))
 
+    def test_github_actions_gets_one_notice_with_all_results(self):
+        import io
+        from contextlib import redirect_stdout
+
+        def fake_get(url, params=None, timeout=None):
+            return FakeResponse({"organic_results": [
+                {"title": "Data Analyst Jobs in Dammam (25 new)", "snippet": "Jobs.",
+                 "link": "https://sa.linkedin.com/jobs/data-analyst-jobs-dammam"},
+            ]})
+
+        output = io.StringIO()
+        with patch.dict("os.environ", {"SERPAPI_KEY": "k", "GITHUB_ACTIONS": "true"}), \
+                patch.object(engine.requests, "get", fake_get), redirect_stdout(output):
+            engine.search_market_opportunities()
+        notices = [line for line in output.getvalue().splitlines() if line.startswith("::notice")]
+        self.assertEqual(len(notices), 1)
+        self.assertIn("data-analyst-jobs-dammam", notices[0])
+
 
 class QueryPlanTests(unittest.TestCase):
     def test_each_run_uses_a_limited_number_of_queries(self):

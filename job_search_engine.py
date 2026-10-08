@@ -476,9 +476,23 @@ def get_search_stats() -> dict:
     return {"found": SEARCH_STATS["found"], "kept": SEARCH_STATS["kept"], "rejected": rejected}
 
 
+SEARCH_LOG: list[str] = []
+
+
 def log_result(decision: str, title: str, url: str) -> None:
     """One line per search result in the GitHub Actions log, to review the filters."""
-    print(f"[search] {decision} | {title} | {url}")
+    line = f"{decision} | {title} | {url}"
+    SEARCH_LOG.append(line)
+    print(f"[search] {line}")
+
+
+def publish_search_log_notice() -> None:
+    """Put all result lines in one GitHub Actions notice (readable through the API)."""
+    if os.getenv("GITHUB_ACTIONS") != "true" or not SEARCH_LOG:
+        return
+    text = "\n".join(SEARCH_LOG)
+    escaped = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::notice title=Search results::{escaped}")
 
 
 def serpapi_search(query: str, limit: int = 5) -> list[dict]:
@@ -591,15 +605,18 @@ def search_market_opportunities(limit: int = 8) -> list[dict]:
     all_results = []
     SEARCH_PROBLEMS.clear()
     SEARCH_STATS.clear()
+    SEARCH_LOG.clear()
     queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
     for query in queries:
         print(f"[search] query: {query}")
+        SEARCH_LOG.append(f"QUERY: {query}")
         all_results.extend(serpapi_search(query, limit=RESULTS_PER_SEARCH))
 
         if len(all_results) >= limit * 2:
             break
 
+    publish_search_log_notice()
     unique_results = deduplicate(all_results)
 
     return unique_results[:limit]
