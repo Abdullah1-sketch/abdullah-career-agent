@@ -2,6 +2,23 @@ from dataclasses import dataclass
 import re
 from urllib.parse import urlparse
 
+from config import (
+    ABDULLAH_CURRENT_SKILLS,
+    ABDULLAH_GROWING_SKILLS,
+    ADJACENT_ANALYTICS_TITLES,
+    BAD_TITLE_SIGNALS,
+    DATA_CONTEXT_SIGNALS,
+    ENTRY_LEVEL_SIGNALS,
+    LOCATION_WEIGHTS,
+    MEDIUM_SCORE,
+    MISSING_BUT_ACCEPTABLE_SKILLS,
+    SCORE_WEIGHTS,
+    STALE_AFTER_MONTHS,
+    STRONG_SCORE,
+    TARGET_TITLES,
+    TOO_MANY_YEARS,
+)
+
 
 @dataclass(frozen=True)
 class Opportunity:
@@ -12,177 +29,6 @@ class Opportunity:
     url: str
 
 
-TARGET_TITLES = [
-    "data analyst",
-    "junior data analyst",
-    "graduate data analyst",
-    "business data analyst",
-    "business intelligence analyst",
-    "bi analyst",
-    "reporting analyst",
-    "data reporting analyst",
-    "power bi analyst",
-    "data specialist",
-    "محلل بيانات",
-    "محلل ذكاء أعمال",
-    "محلل تقارير",
-    "أخصائي بيانات",
-]
-
-ADJACENT_ANALYTICS_TITLES = [
-    "analytics analyst",
-    "hr analytics analyst",
-    "people analytics",
-    "people analytics analyst",
-    "workforce analytics",
-    "workforce analytics analyst",
-    "talent analytics",
-    "performance analyst",
-    "insights analyst",
-    "business analyst",
-    "operations analyst",
-    "commercial analyst",
-    "product analyst",
-    "statistician",
-    "data analytics",
-    "data & analytics",
-    "data and analytics",
-    "محلل أعمال",
-    "محلل أداء",
-    "محلل عمليات",
-    "محلل موارد بشرية",
-    "إحصائي",
-    "تحليل البيانات",
-    "تحليلات البيانات",
-]
-
-DATA_CONTEXT_SIGNALS = [
-    "data",
-    "analytics",
-    "analysis",
-    "business intelligence",
-    "bi",
-    "reporting",
-    "reports",
-    "dashboard",
-    "dashboards",
-    "power bi",
-    "sql",
-    "excel",
-    "kpi",
-    "metrics",
-    "insights",
-    "visualization",
-    "data quality",
-    "predictive",
-    "statistical",
-    "statistics",
-    "تحليل",
-    "بيانات",
-    "تقارير",
-    "لوحات",
-    "مؤشرات",
-    "ذكاء الأعمال",
-    "إحصاء",
-]
-
-ENTRY_LEVEL_SIGNALS = [
-    "junior",
-    "entry level",
-    "fresh graduate",
-    "fresh graduates",
-    "graduate",
-    "graduates",
-    "graduate program",
-    "graduate development program",
-    "development program",
-    "tamheer",
-    "intern",
-    "internship",
-    "internships",
-    "coop",
-    "trainee",
-    "0-1",
-    "0-2",
-    "0-3",
-    "1-2 years",
-    "2 years",
-    "حديث تخرج",
-    "حديث التخرج",
-    "حديثي التخرج",
-    "خريج",
-    "برنامج تطوير الخريجين",
-    "تمهير",
-    "تدريب",
-    "متدرب",
-]
-
-ABDULLAH_CURRENT_SKILLS = [
-    "excel",
-    "power bi",
-    "dashboard",
-    "dashboards",
-    "reporting",
-    "reports",
-    "analysis",
-    "analytics",
-    "business intelligence",
-    "bi",
-    "data visualization",
-    "visualization",
-    "metrics",
-    "kpi",
-    "insights",
-    "تحليل",
-    "تقارير",
-    "لوحات",
-    "مؤشرات",
-    "تصور البيانات",
-]
-
-ABDULLAH_GROWING_SKILLS = [
-    "sql",
-    "database",
-    "query",
-    "queries",
-    "data quality",
-    "قواعد بيانات",
-    "استعلامات",
-]
-
-MISSING_BUT_ACCEPTABLE_SKILLS = [
-    "python",
-    "tableau",
-    "looker",
-    "statistics",
-    "statistical",
-    "machine learning",
-    "predictive",
-    "بايثون",
-    "إحصاء",
-]
-
-# Checked against the job TITLE only: descriptions often mention these
-# words for other people ("report to the manager", "work with data engineers").
-BAD_TITLE_SIGNALS = [
-    "senior",
-    "lead",
-    "manager",
-    "director",
-    "principal",
-    "staff",
-    "head of",
-    "machine learning engineer",
-    "data engineer",
-    "database administrator",
-    "data scientist",
-    "مدير",
-    "خبير",
-    "رئيس",
-]
-
-# A job is too senior when it asks for at least this many years.
-TOO_MANY_YEARS = 3
 # Bigger numbers next to "years" are usually age limits ("22-35 years old").
 MAX_REALISTIC_YEARS = 15
 
@@ -228,8 +74,6 @@ CLOSED_POSTING_SIGNALS = [
     "منتهي",
 ]
 
-# A posting this old (or older) is treated as stale.
-STALE_AFTER_MONTHS = 2
 
 ENGLISH_POSTING_AGE_PATTERN = re.compile(r"(\d+|a|an|one)\s+(month|year)s?\s+ago")
 ARABIC_POSTING_AGE_PATTERN = re.compile(r"منذ\s+(?:(\d+)\s+)?(شهرين|سنتين|أشهر|شهور|شهر|سنوات|سنة|عام)")
@@ -304,14 +148,6 @@ INTERVIEW_PATH_SIGNALS = [
     "وظائف",
 ]
 
-LOCATION_WEIGHTS = [
-    (["riyadh", "الرياض"], 20, "Location fits Riyadh priority"),
-    (["eastern province", "eastern", "dammam", "khobar", "dhahran", "الشرقية", "الدمام", "الخبر", "الظهران"], 18, "Location fits Eastern Province priority"),
-    (["qassim", "buraydah", "unaizah", "القصيم", "بريدة", "عنيزة"], 16, "Location fits Qassim priority"),
-    (["saudi arabia", "ksa", "السعودية"], 8, "Location fits Saudi Arabia preferences"),
-    (["remote", "hybrid", "عن بعد", "هجين"], 6, "Remote option may fit"),
-]
-
 
 ARABIC_CHARS = re.compile(r"[؀-ۿ]")
 
@@ -322,9 +158,6 @@ def term_in_text(term: str, text: str) -> bool:
         return term in text
     pattern = r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])"
     return re.search(pattern, text) is not None
-
-
-ENTRY_LEVEL_BONUS = 18
 
 
 def contains_any(text: str, terms: list[str]) -> bool:
@@ -490,29 +323,29 @@ def score_opportunity(opportunity: Opportunity) -> dict:
     has_data_context = contains_any(full_text, DATA_CONTEXT_SIGNALS)
 
     if has_direct_title:
-        score += 38
+        score += SCORE_WEIGHTS["title_direct"]
         add_reason(reasons, "Relevant data-analysis title")
     elif has_adjacent_title and has_data_context:
-        score += 30
+        score += SCORE_WEIGHTS["title_adjacent"]
         add_reason(reasons, "Relevant data-analysis title")
     elif has_direct_title_in_text:
-        score += 24
+        score += SCORE_WEIGHTS["title_direct_in_text"]
         add_reason(reasons, "Relevant data-analysis title")
     elif has_adjacent_title_in_text and has_data_context:
-        score += 18
+        score += SCORE_WEIGHTS["title_adjacent_in_text"]
         add_reason(reasons, "Relevant data-analysis title")
 
     # Most Saudi postings don't say "junior", so missing level words is neutral.
     if contains_any(full_text, ENTRY_LEVEL_SIGNALS):
-        score += ENTRY_LEVEL_BONUS
+        score += SCORE_WEIGHTS["entry_level"]
         add_reason(reasons, "Matches Abdullah's entry-level path")
 
     if contains_any(full_text, ABDULLAH_CURRENT_SKILLS):
-        score += 22
+        score += SCORE_WEIGHTS["current_skills"]
         add_reason(reasons, "Matches Abdullah's current skills")
 
     if contains_any(full_text, ABDULLAH_GROWING_SKILLS):
-        score += 8
+        score += SCORE_WEIGHTS["growing_skills"]
         add_reason(reasons, "Matches Abdullah's SQL learning path")
 
     location_score, location_reason = score_location(full_text)
@@ -521,29 +354,29 @@ def score_opportunity(opportunity: Opportunity) -> dict:
         add_reason(reasons, location_reason)
 
     if opportunity.url and is_aggregator_url(opportunity.url):
-        score -= 5
+        score += SCORE_WEIGHTS["job_board"]
         add_reason(reasons, "Posted on a job board: apply on the company site if possible")
     elif contains_any(full_text, INTERVIEW_PATH_SIGNALS):
-        score += 8
+        score += SCORE_WEIGHTS["clear_apply_path"]
         add_reason(reasons, "Has a clearer path to interview or outreach")
 
     if contains_any(full_text, MISSING_BUT_ACCEPTABLE_SKILLS):
-        score -= 5
+        score += SCORE_WEIGHTS["skill_gap"]
         add_reason(reasons, "Has a skill gap Abdullah can prepare for")
 
     if not has_data_context:
-        score -= 25
+        score += SCORE_WEIGHTS["no_data_context"]
         add_reason(reasons, "Not enough job details to confirm fit")
 
     if opportunity.url and not opportunity.url.startswith("http"):
-        score -= 15
+        score += SCORE_WEIGHTS["invalid_url"]
         add_reason(reasons, "Not enough job details to confirm fit")
 
     final_score = max(0, min(score, 100))
 
-    if final_score >= 80:
+    if final_score >= STRONG_SCORE:
         priority = "Strong"
-    elif final_score >= 60:
+    elif final_score >= MEDIUM_SCORE:
         priority = "Medium"
     else:
         priority = "Low"

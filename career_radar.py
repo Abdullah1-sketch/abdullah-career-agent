@@ -1,5 +1,6 @@
 from opportunity_scoring import Opportunity, score_opportunity
 from interview_path import recommend_interview_path
+from config import MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
@@ -208,13 +209,13 @@ def get_category(opportunity_data: dict, score: int) -> str:
     if opportunity_data.get("is_real_job") is False:
         return "⚪ راقب"
 
-    if score >= 80:
+    if score >= STRONG_SCORE:
         return "🟢 قدّم الآن"
 
-    if score >= 60:
+    if score >= MEDIUM_SCORE:
         return "🟡 قدّم سريع"
 
-    if score >= 45:
+    if score >= WATCH_SCORE:
         return "🟡 راقب"
 
     return "⚪ راقب"
@@ -248,7 +249,7 @@ def build_missing_items(opportunity_data: dict) -> str:
 def build_extra_push(opportunity_data: dict, score: int) -> str:
     city = estimate_city(opportunity_data)
 
-    if score < 80:
+    if score < STRONG_SCORE:
         return ""
 
     if city not in ["الرياض", "الشرقية", "القصيم"]:

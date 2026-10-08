@@ -2,7 +2,8 @@ import unittest
 
 from career_radar import is_low_quality_item
 from interview_path import recommend_interview_path
-from opportunity_scoring import ENTRY_LEVEL_BONUS, Opportunity, is_stale_posting, score_opportunity
+from config import SCORE_WEIGHTS
+from opportunity_scoring import Opportunity, is_stale_posting, score_opportunity
 
 SENIOR_REASON = "May be too senior or outside target path"
 AGGREGATOR_REASON = "Posted on a job board: apply on the company site if possible"
@@ -107,7 +108,7 @@ class MissingLevelWordTests(unittest.TestCase):
         plain = dict(title="Data Analyst", location="", url="https://example-company.sa/123")
         without_level = score(description="Excel reporting.", **plain)["score"]
         with_junior = score(description="Junior role. Excel reporting.", **plain)["score"]
-        self.assertEqual(with_junior - without_level, ENTRY_LEVEL_BONUS)
+        self.assertEqual(with_junior - without_level, SCORE_WEIGHTS["entry_level"])
 
 
 class StaleJobTests(unittest.TestCase):
