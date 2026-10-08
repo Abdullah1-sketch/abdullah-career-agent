@@ -349,3 +349,17 @@ SPECIALTY_TITLE_SIGNALS = [
     "logistics", "clinical", "medical", "legal", "cyber", "security", "network",
     "drilling", "reservoir", "engineer", "engineering", "مبيعات", "تسويق", "مشتريات",
 ]
+
+# Words on an employer page that show applications are being accepted.
+APPLY_OPEN_SIGNALS = [
+    "apply now", "apply for this job", "apply for this position", "apply to this job",
+    "submit application", "submit your application", "start application", "start your application",
+    "قدم الآن", "قدّم الآن", "تقدم الآن", "التقديم على الوظيفة", "تقديم الطلب", "قدم على الوظيفة",
+]
+
+# Postings older than this are dropped unless an open application was confirmed.
+MAX_UNCONFIRMED_POSTING_AGE_DAYS = 30
+# A date inside the link (e.g. "...-20250221") older than this means an old posting.
+MAX_LINK_DATE_AGE_DAYS = 60
+# A LinkedIn posting newer than this counts as medium reliability.
+FRESH_LINKEDIN_DAYS = 14

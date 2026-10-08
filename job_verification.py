@@ -12,13 +12,19 @@ a LinkedIn-only job stays "not verified" and the message says to check it.
 """
 
 import re
+from datetime import date, datetime
 from urllib.parse import urljoin, urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
 
 from config import (
     ABDULLAH_HAS_SKILLS,
+    APPLY_OPEN_SIGNALS,
+    FRESH_LINKEDIN_DAYS,
+    MAX_LINK_DATE_AGE_DAYS,
+    MAX_UNCONFIRMED_POSTING_AGE_DAYS,
     ABDULLAH_LEARNING_SKILLS,
     ATS_DOMAINS,
     JOB_BOARD_DOMAINS,
@@ -26,7 +32,7 @@ from config import (
     PLATFORM_SKILLS,
     SKILL_TERMS,
 )
-from opportunity_scoring import contains_any, is_stale_posting, required_experience_years
+from opportunity_scoring import ARABIC_DIGITS, contains_any, is_stale_posting, required_experience_years
 
 
 HEADERS = {"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/2.0"}
@@ -148,8 +154,10 @@ def verify_job(job: dict) -> dict:
 
     if is_stale_posting(all_text):
         status = "closed"
+    elif read_employer_page and contains_any(page_text, APPLY_OPEN_SIGNALS):
+        status = "open_confirmed"
     elif read_employer_page:
-        status = "open"
+        status = "page_seen"
     else:
         status = "unknown"
 
@@ -157,7 +165,83 @@ def verify_job(job: dict) -> dict:
         "source": source,
         "source_url": source_url,
         "status": status,
-        "verified": read_employer_page and status == "open",
+        "verified": status == "open_confirmed",
+        "checked_at": datetime.now(ZoneInfo("Asia/Riyadh")).strftime("%Y-%m-%d %H:%M"),
         "experience_years": required_experience_years(all_text),
         "requirements": analyze_requirements(all_text),
     }
+
+
+# ---------- Dates ----------
+
+ENGLISH_AGE_PATTERN = re.compile(r"(\d+|an|a|one)\+?\s*(hour|day|week|month|year)s?\s+ago")
+ARABIC_AGE_PATTERN = re.compile(
+    r"منذ\s+(\d+)?\s*(ساعات|ساعة|يومين|أيام|يوم|أسبوعين|أسابيع|أسبوع|شهرين|أشهر|شهور|شهر|سنتين|سنوات|سنة)"
+)
+UNIT_DAYS = {"hour": 0, "day": 1, "week": 7, "month": 30, "year": 365}
+ARABIC_UNIT_DAYS = {
+    "ساعة": 0, "ساعات": 0, "يوم": 1, "أيام": 1, "أسبوع": 7, "أسابيع": 7,
+    "شهر": 30, "أشهر": 30, "شهور": 30, "سنة": 365, "سنوات": 365,
+}
+ARABIC_DUAL_DAYS = {"يومين": 2, "أسبوعين": 14, "شهرين": 60, "سنتين": 730}
+LINK_DATE_PATTERN = re.compile(r"(?<!\d)(20\d{2})[-_/]?(0[1-9]|1[0-2])[-_/]?(0[1-9]|[12]\d|3[01])(?!\d)")
+
+
+def posted_age_days(text: str) -> int | None:
+    """Days since posting from text like "3 days ago", "30+ days ago" or "منذ 5 أيام"."""
+    text = (text or "").lower().translate(ARABIC_DIGITS)
+
+    match = ENGLISH_AGE_PATTERN.search(text)
+    if match:
+        count = 1 if match.group(1) in ("an", "a", "one") else int(match.group(1))
+        return count * UNIT_DAYS[match.group(2)]
+
+    match = ARABIC_AGE_PATTERN.search(text)
+    if match:
+        number, unit = match.group(1), match.group(2)
+        if unit in ARABIC_DUAL_DAYS:
+            return ARABIC_DUAL_DAYS[unit]
+        return (int(number) if number else 1) * ARABIC_UNIT_DAYS[unit]
+
+    return None
+
+
+def link_date_age_days(url: str, today: date | None = None) -> int | None:
+    """Age of a date written inside a link, e.g. ".../accenture-analyst-20250221"."""
+    today = today or date.today()
+    for year, month, day in LINK_DATE_PATTERN.findall(url):
+        try:
+            found = date(int(year), int(month), int(day))
+        except ValueError:
+            continue
+        if found <= today:
+            return (today - found).days
+    return None
+
+
+def is_old_and_unconfirmed(result: dict, posted_days: int | None, link_days: int | None) -> bool:
+    if result["status"] == "open_confirmed":
+        return False
+    too_old_posting = posted_days is not None and posted_days >= MAX_UNCONFIRMED_POSTING_AGE_DAYS
+    too_old_link = link_days is not None and link_days > MAX_LINK_DATE_AGE_DAYS
+    return too_old_posting or too_old_link
+
+
+# ---------- Reliability ----------
+
+def reliability(result: dict, posted_days: int | None) -> tuple[str, str]:
+    """(level, reason): how sure we are the posting is real, current and open."""
+    source, status = result["source"], result["status"]
+    if source == "company" and status == "open_confirmed":
+        return "high", "إعلان الشركة الأصلي وفيه زر تقديم"
+    if source == "company" and status == "page_seen":
+        return "medium", "صفحة الشركة موجودة، بس ما تأكدت إن التقديم مفتوح"
+    if source == "linkedin" and posted_days is not None and posted_days <= FRESH_LINKEDIN_DAYS:
+        return "medium", "إعلان LinkedIn حديث، ما أقدر أفتحه وأتأكد"
+    if source == "linkedin":
+        return "low", "إعلان LinkedIn بدون تاريخ واضح، ما أقدر أفتحه"
+    if source == "job_board":
+        return "low", "منشور في موقع تجميع وما لقيت إعلان الشركة"
+    if source == "company":
+        return "low", "صفحة الشركة ما انفتحت"
+    return "low", "مصدر غير معروف"
