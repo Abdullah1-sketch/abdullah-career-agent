@@ -19,6 +19,8 @@ from opportunity_scoring import (
 
 
 SERPAPI_URL = "https://serpapi.com/search.json"
+# One SerpApi credit returns up to 10 Google results, so ask for all 10.
+RESULTS_PER_SEARCH = 10
 
 SEARCH_QUERIES = [
     "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Data Analyst\" \"0-2\"",
@@ -584,7 +586,7 @@ def search_market_opportunities(limit: int = 8) -> list[dict]:
     queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
     for query in queries:
-        all_results.extend(serpapi_search(query, limit=5))
+        all_results.extend(serpapi_search(query, limit=RESULTS_PER_SEARCH))
 
         if len(all_results) >= limit * 2:
             break

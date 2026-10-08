@@ -298,7 +298,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 
 def search_market_safely() -> list[dict]:
     try:
-        return search_market_opportunities(limit=8)
+        return search_market_opportunities(limit=15)
     except TypeError:
         return search_market_opportunities()
 

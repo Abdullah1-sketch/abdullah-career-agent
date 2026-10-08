@@ -147,6 +147,19 @@ class SerpApiSearchTests(unittest.TestCase):
         problems = self.run_with_get(lambda *args, **kwargs: HtmlResponse())
         self.assertIn("502", problems)
 
+    def test_daily_search_asks_for_ten_results_per_query(self):
+        captured = []
+
+        def fake_get(url, params=None, timeout=None):
+            captured.append(params)
+            return FakeResponse({"organic_results": []})
+
+        with patch.dict("os.environ", {"SERPAPI_KEY": "test-key"}), \
+                patch.object(engine.requests, "get", fake_get):
+            engine.search_market_opportunities()
+        self.assertTrue(captured)
+        self.assertTrue(all(params["num"] == 10 for params in captured))
+
 
 class QueryPlanTests(unittest.TestCase):
     def test_each_run_uses_a_limited_number_of_queries(self):
