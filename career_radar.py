@@ -58,6 +58,9 @@ BLOCKED_GENERIC_SOURCES = [
     "bayt.com",
     "naukrigulf.com",
     "glassdoor.com",
+    "bebee.com",
+    "trabajo.org",
+    "learn4good.com",
 ]
 
 BLOCKED_GENERIC_TITLE_TERMS = [
@@ -186,10 +189,10 @@ def estimate_city(opportunity_data: dict) -> str:
 
     if contains_any(text, ["riyadh", "الرياض"]):
         return "الرياض"
-    if contains_any(text, ["qassim", "buraydah", "unaizah", "القصيم", "بريدة", "عنيزة"]):
-        return "القصيم"
     if contains_any(text, ["khobar", "dammam", "dhahran", "eastern", "الخبر", "الدمام", "الظهران", "الشرقية"]):
         return "الشرقية"
+    if contains_any(text, ["qassim", "buraydah", "unaizah", "القصيم", "بريدة", "عنيزة"]):
+        return "القصيم"
     if contains_any(text, ["saudi", "ksa", "السعودية"]):
         return "السعودية"
 
@@ -248,6 +251,23 @@ def build_missing_items(opportunity_data: dict) -> str:
     return "، ".join(missing[:2])
 
 
+def build_extra_push(opportunity_data: dict, score: int) -> str:
+    city = estimate_city(opportunity_data)
+
+    if score < 85:
+        return ""
+
+    if city not in ["الرياض", "الشرقية", "القصيم"]:
+        return ""
+
+    return (
+        "\n\nزيادة فرصتك:\n"
+        "- قدّم من الرابط.\n"
+        "- بعدها أرسل رسالة LinkedIn قصيرة لمسؤول توظيف أو شخص من فريق البيانات.\n"
+        f"- إذا تقدر: تحرك يدوي في {city}."
+    )
+
+
 def build_opportunity_section(opportunity_data: dict) -> str:
     opportunity = build_opportunity(opportunity_data)
     scoring = score_opportunity(opportunity)
@@ -277,7 +297,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 {chr(10).join("- " + action for action in actions)}
 
 الرابط:
-{record["url"]}"""
+{record["url"]}{build_extra_push(opportunity_data, score)}"""
 
 
 def search_market_safely() -> list[dict]:
@@ -330,8 +350,8 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
         city = estimate_city(item)
         city_rank = {
             "الرياض": 0,
-            "القصيم": 1,
-            "الشرقية": 2,
+            "الشرقية": 1,
+            "القصيم": 2,
             "السعودية": 3,
         }.get(city, 4)
 
