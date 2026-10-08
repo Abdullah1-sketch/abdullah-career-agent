@@ -109,6 +109,20 @@ class SerpApiSearchTests(unittest.TestCase):
         self.assertEqual(stats["kept"], 1)
         self.assertEqual(stats["rejected"], {engine.REJECT_SENIOR_TITLE: 1})
 
+    def test_each_result_is_logged_with_its_decision(self):
+        import io
+        from contextlib import redirect_stdout
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.search({"organic_results": [
+                {"title": "Data Analyst Jobs in Dammam (25 new)", "snippet": "Data analyst jobs.",
+                 "link": "https://sa.linkedin.com/jobs/data-analyst-jobs-dammam"},
+            ]})
+        log = output.getvalue()
+        self.assertIn(engine.REJECT_NOT_JOB_PAGE, log)
+        self.assertIn("https://sa.linkedin.com/jobs/data-analyst-jobs-dammam", log)
+
     def test_serpapi_error_is_reported(self):
         engine.SEARCH_PROBLEMS.clear()
         self.search({"error": "Your account has run out of searches."})

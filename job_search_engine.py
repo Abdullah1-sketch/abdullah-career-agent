@@ -476,6 +476,11 @@ def get_search_stats() -> dict:
     return {"found": SEARCH_STATS["found"], "kept": SEARCH_STATS["kept"], "rejected": rejected}
 
 
+def log_result(decision: str, title: str, url: str) -> None:
+    """One line per search result in the GitHub Actions log, to review the filters."""
+    print(f"[search] {decision} | {title} | {url}")
+
+
 def serpapi_search(query: str, limit: int = 5) -> list[dict]:
     api_key = os.getenv("SERPAPI_KEY")
 
@@ -524,6 +529,7 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
 
         if not final_url:
             SEARCH_STATS[f"rejected:{REJECT_NOT_JOB_PAGE}"] += 1
+            log_result(REJECT_NOT_JOB_PAGE, title, raw_url)
             continue
 
         company = ""
@@ -535,9 +541,11 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         reason = result_rejection_reason(title, f"{listed_location} {snippet}", final_url)
         if reason:
             SEARCH_STATS[f"rejected:{reason}"] += 1
+            log_result(reason, title, final_url)
             continue
 
         SEARCH_STATS["kept"] += 1
+        log_result("kept", title, final_url)
 
         company = company or extract_company(title, final_url, snippet)
         location = estimate_location(listed_location, f"{title} {snippet}")
@@ -586,6 +594,7 @@ def search_market_opportunities(limit: int = 8) -> list[dict]:
     queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
     for query in queries:
+        print(f"[search] query: {query}")
         all_results.extend(serpapi_search(query, limit=RESULTS_PER_SEARCH))
 
         if len(all_results) >= limit * 2:
