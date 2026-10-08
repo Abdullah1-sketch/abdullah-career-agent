@@ -286,9 +286,20 @@ LOCATION_WEIGHTS = [
 ]
 
 
+ARABIC_CHARS = re.compile(r"[؀-ۿ]")
+
+
+def term_in_text(term: str, text: str) -> bool:
+    """English: whole-word match. Arabic: plain substring (words often carry "ال")."""
+    if ARABIC_CHARS.search(term):
+        return term in text
+    pattern = r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])"
+    return re.search(pattern, text) is not None
+
+
 def contains_any(text: str, terms: list[str]) -> bool:
     text = text.lower()
-    return any(term.lower() in text for term in terms)
+    return any(term_in_text(term.lower(), text) for term in terms)
 
 
 def add_reason(reasons: list[str], reason: str | None) -> None:
