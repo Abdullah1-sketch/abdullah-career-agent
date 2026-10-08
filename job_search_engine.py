@@ -138,6 +138,10 @@ AGGREGATOR_DOMAINS = [
 ]
 
 
+# Real postings use many titles ("Data Analysis - Tamheer", "MIS & Dashboards
+# Analyst"); any analyst-type title with data context is worth scoring.
+ANALYST_TITLE_WORDS = ["analyst", "analysis", "analytics", "محلل", "تحليل"]
+
 REJECT_SENIOR_TITLE = "مسمى أعلى من مستواك"
 REJECT_OLD = "قديمة أو مغلقة"
 REJECT_HIGH_EXPERIENCE = "تطلب خبرة 3+"
@@ -202,7 +206,8 @@ def job_rejection_reason(opportunity: dict) -> str | None:
         return REJECT_OLD
     if has_high_experience(text):
         return REJECT_HIGH_EXPERIENCE
-    if not (contains_any(text, TARGET_TITLE_TERMS) and contains_any(text, DATA_CONTEXT_TERMS)):
+    is_analytics_role = contains_any(text, TARGET_TITLE_TERMS) or contains_any(title, ANALYST_TITLE_WORDS)
+    if not (is_analytics_role and contains_any(text, DATA_CONTEXT_TERMS)):
         return REJECT_NOT_DATA
     if not contains_any(opportunity["location"], LOCATION_TERMS):
         return REJECT_LOCATION

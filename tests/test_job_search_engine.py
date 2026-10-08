@@ -107,6 +107,11 @@ class RejectionReasonTests(unittest.TestCase):
         self.assertEqual(self.reason(location="Dubai - United Arab Emirates"), engine.REJECT_LOCATION)
         self.assertEqual(self.reason(posted="2 months ago"), engine.REJECT_OLD)
 
+    def test_real_junior_titles_from_google_jobs_are_kept(self):
+        for title in ["Data Analysis - Tamheer", "Junior MIS & Dashboards Analyst", "Data & AI Analyst"]:
+            with self.subTest(title):
+                self.assertIsNone(self.reason(title=title, description="Excel and Power BI dashboards and reports."))
+
     def test_manager_in_description_is_fine(self):
         self.assertIsNone(self.reason(description="Excel and Power BI reports for the finance manager."))
 

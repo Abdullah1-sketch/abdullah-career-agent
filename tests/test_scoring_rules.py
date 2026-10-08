@@ -156,5 +156,13 @@ class GraduateProgramTests(unittest.TestCase):
         self.assertGreaterEqual(result["score"], 80, result)
 
 
+class RealGoogleJobsTitleTests(unittest.TestCase):
+    def test_tamheer_and_dashboard_titles_score_as_apply(self):
+        for title in ["Data Analysis - Tamheer", "Junior MIS & Dashboards Analyst"]:
+            with self.subTest(title):
+                result = score(title=title, description="Excel and Power BI dashboards and reports.")
+                self.assertGreaterEqual(result["score"], 80, result)
+
+
 if __name__ == "__main__":
     unittest.main()
