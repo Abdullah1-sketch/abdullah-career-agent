@@ -87,5 +87,23 @@ class SerpApiSearchTests(unittest.TestCase):
         self.assertEqual(results[0]["location"], "الرياض")
 
 
+class QueryPlanTests(unittest.TestCase):
+    def test_each_run_uses_a_limited_number_of_queries(self):
+        self.assertEqual(len(engine.choose_queries_for_day(day_number=1, per_run=6)), 6)
+
+    def test_rotation_covers_every_query_within_a_few_days(self):
+        per_run = 6
+        days_needed = -(-len(engine.SEARCH_QUERIES) // per_run)
+        used = set()
+        for day in range(days_needed):
+            used.update(engine.choose_queries_for_day(day_number=day, per_run=per_run))
+        self.assertEqual(used, set(engine.SEARCH_QUERIES))
+
+    def test_queries_cover_priority_regions_and_graduate_programs(self):
+        all_queries = " ".join(engine.SEARCH_QUERIES).lower()
+        for term in ["riyadh", "dammam", "khobar", "qassim", "graduate", "tamheer", "محلل بيانات"]:
+            self.assertIn(term, all_queries)
+
+
 if __name__ == "__main__":
     unittest.main()

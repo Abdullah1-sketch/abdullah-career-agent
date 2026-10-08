@@ -21,6 +21,12 @@ def get_settings() -> Settings:
 
 
 
+# Paid Google searches (SerpApi) per daily run. The bot rotates through all
+# its queries over a few days. 6 a day is about 180 a month; lower it if your
+# SerpApi plan has fewer searches.
+SEARCHES_PER_RUN = 6
+
+
 # ============================================================
 # Job scoring settings
 # Edit these lists and numbers to tune what the bot recommends.

@@ -1,11 +1,12 @@
 import os
 import re
+from datetime import date
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-from config import BAD_TITLE_SIGNALS
+from config import BAD_TITLE_SIGNALS, SEARCHES_PER_RUN
 from opportunity_scoring import (
     CLOSED_POSTING_SIGNALS,
     contains_any,
@@ -34,6 +35,17 @@ SEARCH_QUERIES = [
     "site:jobs.ashbyhq.com Saudi Arabia Riyadh data analyst",
     "site:*.careers-page.com Riyadh \"Data Analyst\"",
     "site:*.careers-page.com Riyadh \"Business Intelligence\"",
+    # Eastern Province
+    "site:linkedin.com/jobs/view Dammam OR Khobar OR Dhahran \"Data Analyst\"",
+    "site:linkedin.com/jobs/view Dammam OR Khobar OR Dhahran \"BI Analyst\" OR \"Reporting Analyst\"",
+    # Qassim
+    "site:linkedin.com/jobs/view Qassim OR Buraydah OR Unaizah analyst data",
+    # Graduate programs, Tamheer and Arabic postings
+    "site:linkedin.com/jobs/view Saudi Arabia \"Graduate Development Program\" data",
+    "site:linkedin.com/jobs/view Saudi Arabia \"fresh graduate\" \"Data Analyst\"",
+    "site:linkedin.com/jobs/view Saudi Arabia Tamheer data analysis",
+    "site:linkedin.com/jobs/view السعودية \"محلل بيانات\"",
+    "site:myworkdayjobs.com Saudi Arabia \"Data Analyst\"",
 ]
 
 TARGET_TITLE_TERMS = [
@@ -123,7 +135,11 @@ LOCATION_TERMS = [
     "الخبر",
     "الظهران",
     "qassim",
+    "buraydah",
+    "unaizah",
     "القصيم",
+    "بريدة",
+    "عنيزة",
     "saudi arabia",
     "ksa",
     "السعودية",
@@ -491,10 +507,22 @@ def deduplicate(items: list[dict]) -> list[dict]:
     return list(unique.values())
 
 
+def choose_queries_for_day(day_number: int, per_run: int) -> list[str]:
+    """Rotate through the queries so each day searches a different slice.
+
+    Keeps paid search usage at `per_run` searches a day while still covering
+    every query every few days.
+    """
+    start = (day_number * per_run) % len(SEARCH_QUERIES)
+    rotated = SEARCH_QUERIES[start:] + SEARCH_QUERIES[:start]
+    return rotated[:per_run]
+
+
 def search_market_opportunities(limit: int = 8) -> list[dict]:
     all_results = []
+    queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
-    for query in SEARCH_QUERIES:
+    for query in queries:
         all_results.extend(serpapi_search(query, limit=5))
 
         if len(all_results) >= limit * 2:
