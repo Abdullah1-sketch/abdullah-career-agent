@@ -153,6 +153,10 @@ def translate_action(action: str) -> str:
         "Apply officially": "قدّم رسميًا",
         "Keep in daily report and monitor": "راقب فقط",
         "Do not spend much time unless new signals appear": "لا تصرف وقتًا الآن",
+        "Fast apply only, do not customize heavily": "قدّم سريعًا بدون تخصيص كبير",
+        "Prepare a short LinkedIn message": "أرسل رسالة LinkedIn قصيرة",
+        "Fast apply if it takes less than 5 minutes": "قدّم سريعًا إذا ما يأخذ أكثر من 5 دقائق",
+        "Do not customize heavily": "لا تخصص لها وقت كثير",
     }.get(action, action)
 
 
@@ -217,10 +221,13 @@ def get_category(opportunity_data: dict, score: int) -> str:
     if opportunity_data.get("is_real_job") is False:
         return "⚪ راقب"
 
-    if score >= 75:
+    if score >= 80:
         return "🟢 قدّم الآن"
 
-    if score >= 55:
+    if score >= 60:
+        return "🟡 قدّم سريع"
+
+    if score >= 45:
         return "🟡 راقب"
 
     return "⚪ راقب"
@@ -254,7 +261,7 @@ def build_missing_items(opportunity_data: dict) -> str:
 def build_extra_push(opportunity_data: dict, score: int) -> str:
     city = estimate_city(opportunity_data)
 
-    if score < 85:
+    if score < 80:
         return ""
 
     if city not in ["الرياض", "الشرقية", "القصيم"]:
@@ -263,7 +270,7 @@ def build_extra_push(opportunity_data: dict, score: int) -> str:
     return (
         "\n\nزيادة فرصتك:\n"
         "- قدّم من الرابط.\n"
-        "- بعدها أرسل رسالة LinkedIn قصيرة لمسؤول توظيف أو شخص من فريق البيانات.\n"
+        "- أرسل رسالة LinkedIn قصيرة لمسؤول توظيف أو شخص من فريق البيانات.\n"
         f"- إذا تقدر: تحرك يدوي في {city}."
     )
 
@@ -342,10 +349,12 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
 
         if category.startswith("🟢"):
             category_rank = 0
-        elif category.startswith("🟡"):
+        elif category.startswith("🟡 قدّم سريع"):
             category_rank = 1
-        else:
+        elif category.startswith("🟡"):
             category_rank = 2
+        else:
+            category_rank = 3
 
         city = estimate_city(item)
         city_rank = {
@@ -375,15 +384,23 @@ def build_daily_radar_message() -> str:
         if get_category(opportunity, get_score(opportunity)).startswith("🟢")
     ]
 
+    fast_apply = [
+        opportunity for opportunity in opportunities
+        if get_category(opportunity, get_score(opportunity)).startswith("🟡 قدّم سريع")
+    ]
+
     early_signals = [
         opportunity for opportunity in opportunities
-        if get_category(opportunity, get_score(opportunity)).startswith("🟡")
+        if get_category(opportunity, get_score(opportunity)) == "🟡 راقب"
     ]
 
     if apply_now:
         sections = ["فرص اليوم:"]
         sections.extend(build_opportunity_section(item) for item in apply_now[:2])
         return "\n\n".join(sections)
+
+    if fast_apply:
+        return "لا توجد فرصة ذهبية اليوم.\n\nلكن هذه تستحق تقديم سريع:\n\n" + build_opportunity_section(fast_apply[0])
 
     if early_signals:
         return "لا توجد فرصة قوية اليوم.\n\nإشارة للمراقبة فقط:\n\n" + build_opportunity_section(early_signals[0])
