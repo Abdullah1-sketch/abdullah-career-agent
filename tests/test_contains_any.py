@@ -29,6 +29,10 @@ class EnglishWholeWordMatchTests(unittest.TestCase):
         self.assertTrue(contains_any("needs 3+ years", ["3+ years"]))
         self.assertTrue(contains_any("https://linkedin.com/jobs/view/1", ["linkedin.com/jobs/view"]))
 
+    def test_terms_with_punctuation_edges_match_inside_urls(self):
+        self.assertTrue(contains_any("https://www.linkedin.com/jobs/view/4012345678", ["/jobs/view/"]))
+        self.assertTrue(contains_any("https://x.sa/job/77", ["/job/"]))
+
     def test_case_insensitive(self):
         self.assertTrue(contains_any("JUNIOR Data Analyst", ["junior"]))
 

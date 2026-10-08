@@ -156,8 +156,11 @@ def term_in_text(term: str, text: str) -> bool:
     """English: whole-word match. Arabic: plain substring (words often carry "ال")."""
     if ARABIC_CHARS.search(term):
         return term in text
-    pattern = r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])"
-    return re.search(pattern, text) is not None
+    # Word edges only matter where the term itself starts/ends with a letter or digit
+    # ("/jobs/view/" must still match "/jobs/view/123").
+    before = r"(?<![a-z0-9])" if term[:1].isalnum() else ""
+    after = r"(?![a-z0-9])" if term[-1:].isalnum() else ""
+    return re.search(before + re.escape(term) + after, text) is not None
 
 
 def contains_any(text: str, terms: list[str]) -> bool:
