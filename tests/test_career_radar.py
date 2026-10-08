@@ -45,5 +45,22 @@ class DailyMessageTests(unittest.TestCase):
             self.assertIn(item["url"], message)
 
 
+class CheckSummaryTests(unittest.TestCase):
+    def test_message_shows_what_was_checked_and_why_rejected(self):
+        job_search_engine.SEARCH_PROBLEMS.clear()
+        job_search_engine.SEARCH_STATS.clear()
+        job_search_engine.SEARCH_STATS.update(
+            {"found": 9, "kept": 1, f"rejected:{job_search_engine.REJECT_SENIOR_TITLE}": 5,
+             f"rejected:{job_search_engine.REJECT_NOT_DATA}": 3}
+        )
+        items = [make_item("Reporting Analyst 1", "Excel reporting.", 1, location="Jeddah")]
+        with patch.object(career_radar, "get_current_opportunities", return_value=items):
+            message = career_radar.build_daily_radar_message()
+
+        self.assertIn("📊", message)
+        self.assertIn("9 نتيجة", message)
+        self.assertIn(f"{job_search_engine.REJECT_SENIOR_TITLE} 5", message)
+
+
 if __name__ == "__main__":
     unittest.main()

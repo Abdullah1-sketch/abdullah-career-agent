@@ -1,5 +1,6 @@
 import os
 import re
+from collections import Counter
 from datetime import date
 from urllib.parse import urljoin, urlparse
 
@@ -18,6 +19,8 @@ from opportunity_scoring import (
 
 
 SERPAPI_URL = "https://serpapi.com/search.json"
+# One SerpApi credit returns up to 10 Google results, so ask for all 10.
+RESULTS_PER_SEARCH = 10
 
 SEARCH_QUERIES = [
     "site:linkedin.com/jobs/view Saudi Arabia Riyadh \"Data Analyst\" \"0-2\"",
@@ -380,27 +383,37 @@ def estimate_location(title: str, snippet: str) -> str:
     return "غير مذكورة"
 
 
-def is_good_result(title: str, snippet: str, url: str) -> bool:
+REJECT_NOT_JOB_PAGE = "مو صفحة إعلان"
+REJECT_SENIOR_TITLE = "مسمى أعلى من مستواك"
+REJECT_OLD = "قديمة أو مغلقة"
+REJECT_HIGH_EXPERIENCE = "تطلب خبرة 3+"
+REJECT_NOT_DATA = "مو تحليل بيانات"
+REJECT_LOCATION = "خارج مدن السعودية المستهدفة"
+REJECT_HR_SYSTEMS = "أنظمة موارد بشرية"
+REJECT_PROCESS_ONLY = "توثيق عمليات بدون بيانات"
+
+
+def result_rejection_reason(title: str, snippet: str, url: str) -> str | None:
+    """Why a search result is not worth showing, or None if it is."""
     combined = f"{title} {snippet} {url}".lower()
 
-    if not is_direct_job_url(url):
-        return False
-
-    if is_generic_search_result(title, url):
-        return False
+    if not is_direct_job_url(url) or is_generic_search_result(title, url):
+        return REJECT_NOT_JOB_PAGE
 
     if contains_any(title, BAD_TITLE_SIGNALS):
-        return False
+        return REJECT_SENIOR_TITLE
 
-    if is_stale_posting(combined) or has_high_experience(combined):
-        return False
+    if is_stale_posting(combined):
+        return REJECT_OLD
 
-    has_target_title = contains_any(combined, TARGET_TITLE_TERMS)
-    has_data_context = contains_any(combined, DATA_CONTEXT_TERMS)
-    has_location = contains_any(combined, LOCATION_TERMS)
+    if has_high_experience(combined):
+        return REJECT_HIGH_EXPERIENCE
 
-    if not (has_target_title and has_data_context and has_location):
-        return False
+    if not (contains_any(combined, TARGET_TITLE_TERMS) and contains_any(combined, DATA_CONTEXT_TERMS)):
+        return REJECT_NOT_DATA
+
+    if not contains_any(combined, LOCATION_TERMS):
+        return REJECT_LOCATION
 
     # The job page can also list other jobs ("Similar jobs"), so only explicit
     # closure and experience requirements are read from it, not titles or ages.
@@ -408,18 +421,22 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
     full_text = f"{combined} {page_text}"
 
     if contains_any(page_text, CLOSED_POSTING_SIGNALS):
-        return False
+        return REJECT_OLD
 
     if has_high_experience(full_text):
-        return False
+        return REJECT_HIGH_EXPERIENCE
 
     if is_hris_heavy_role(title, full_text):
-        return False
+        return REJECT_HR_SYSTEMS
 
     if is_process_only_business_role(title, full_text):
-        return False
+        return REJECT_PROCESS_ONLY
 
-    return True
+    return None
+
+
+def is_good_result(title: str, snippet: str, url: str) -> bool:
+    return result_rejection_reason(title, snippet, url) is None
 
 
 def build_description(title: str, snippet: str) -> str:
@@ -443,6 +460,20 @@ def record_search_problem(problem: str) -> None:
 
 def get_search_problems() -> list[str]:
     return list(SEARCH_PROBLEMS)
+
+
+# Counts from the last search run, shown in the daily message:
+# "found", "kept" and "rejected:<reason>".
+SEARCH_STATS: Counter = Counter()
+
+
+def get_search_stats() -> dict:
+    rejected = {
+        key.split(":", 1)[1]: count
+        for key, count in SEARCH_STATS.items()
+        if key.startswith("rejected:")
+    }
+    return {"found": SEARCH_STATS["found"], "kept": SEARCH_STATS["kept"], "rejected": rejected}
 
 
 def serpapi_search(query: str, limit: int = 5) -> list[dict]:
@@ -488,9 +519,11 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         if not title or not raw_url:
             continue
 
+        SEARCH_STATS["found"] += 1
         final_url = extract_original_job_url(raw_url)
 
         if not final_url:
+            SEARCH_STATS[f"rejected:{REJECT_NOT_JOB_PAGE}"] += 1
             continue
 
         company = ""
@@ -499,8 +532,12 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
         if parsed_title:
             title, company, listed_location = parsed_title
 
-        if not is_good_result(title, f"{listed_location} {snippet}", final_url):
+        reason = result_rejection_reason(title, f"{listed_location} {snippet}", final_url)
+        if reason:
+            SEARCH_STATS[f"rejected:{reason}"] += 1
             continue
+
+        SEARCH_STATS["kept"] += 1
 
         company = company or extract_company(title, final_url, snippet)
         location = estimate_location(listed_location, f"{title} {snippet}")
@@ -545,10 +582,11 @@ def choose_queries_for_day(day_number: int, per_run: int) -> list[str]:
 def search_market_opportunities(limit: int = 8) -> list[dict]:
     all_results = []
     SEARCH_PROBLEMS.clear()
+    SEARCH_STATS.clear()
     queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
     for query in queries:
-        all_results.extend(serpapi_search(query, limit=5))
+        all_results.extend(serpapi_search(query, limit=RESULTS_PER_SEARCH))
 
         if len(all_results) >= limit * 2:
             break

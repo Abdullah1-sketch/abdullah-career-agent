@@ -4,7 +4,7 @@ from config import MAX_APPLY_NOW_JOBS, MAX_QUICK_APPLY_JOBS, MEDIUM_SCORE, STRON
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
-from job_search_engine import get_search_problems, search_market_opportunities
+from job_search_engine import get_search_problems, get_search_stats, search_market_opportunities
 from interview_strategy import build_interview_strategy
 
 
@@ -298,7 +298,7 @@ def build_opportunity_section(opportunity_data: dict) -> str:
 
 def search_market_safely() -> list[dict]:
     try:
-        return search_market_opportunities(limit=8)
+        return search_market_opportunities(limit=15)
     except TypeError:
         return search_market_opportunities()
 
@@ -386,12 +386,53 @@ def add_search_warning(message: str) -> str:
     return message + "\n\n⚠️ تنبيه: " + " ".join(problems)
 
 
+def build_google_summary() -> str:
+    stats = get_search_stats()
+    line = f"- Google: {stats['found']} نتيجة، المناسب منها {stats['kept']}"
+    if stats["rejected"]:
+        reasons = sorted(stats["rejected"].items(), key=lambda pair: -pair[1])
+        line += "\n  المستبعد: " + "، ".join(f"{reason} {count}" for reason, count in reasons)
+    return line
+
+
+def build_company_pages_summary(opportunities: list[dict]) -> str:
+    from_pages = [item for item in opportunities if item.get("source") == "Company career page scanner"]
+    jobs = [item for item in from_pages if item.get("is_real_job") is not False]
+    watched = len(from_pages) - len(jobs)
+    return f"- مواقع الشركات: {len(jobs)} رابط وظيفة، {watched} شركة بدون إعلان بيانات اليوم"
+
+
+def build_score_summary(opportunities: list[dict]) -> str:
+    counts = {"🟢": 0, "🟡 قدّم سريع": 0, "other": 0}
+    for item in opportunities:
+        if item.get("is_real_job") is False:
+            continue
+        category = get_category(item, get_score(item))
+        if category.startswith("🟢"):
+            counts["🟢"] += 1
+        elif category.startswith("🟡 قدّم سريع"):
+            counts["🟡 قدّم سريع"] += 1
+        else:
+            counts["other"] += 1
+    return f"- التقييم: قدّم الآن {counts['🟢']}، تقديم سريع {counts['🟡 قدّم سريع']}، ضعيفة {counts['other']}"
+
+
+def build_check_summary(opportunities: list[dict]) -> str:
+    return "\n".join([
+        "📊 فحص اليوم:",
+        build_google_summary(),
+        build_company_pages_summary(opportunities),
+        build_score_summary(opportunities),
+    ])
+
+
 def build_daily_radar_message() -> str:
-    return add_search_warning(build_opportunities_message())
-
-
-def build_opportunities_message() -> str:
     opportunities = sort_opportunities(get_current_opportunities())
+    message = build_opportunities_message(opportunities)
+    return add_search_warning(message + "\n\n" + build_check_summary(opportunities))
+
+
+def build_opportunities_message(opportunities: list[dict]) -> str:
 
     apply_now = [
         opportunity for opportunity in opportunities
