@@ -1,6 +1,6 @@
 from opportunity_scoring import Opportunity, score_opportunity
 from interview_path import recommend_interview_path
-from config import MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
+from config import MAX_APPLY_NOW_JOBS, MAX_QUICK_APPLY_JOBS, MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
@@ -358,6 +358,20 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
     return sorted(opportunities, key=sort_key)
 
 
+def build_quick_apply_line(opportunity_data: dict) -> str:
+    score = get_score(opportunity_data)
+    return (
+        f"- {translate_job_title(opportunity_data['title'])} | {opportunity_data['company']} | "
+        f"{estimate_city(opportunity_data)} | {score}/100\n  {opportunity_data['url']}"
+    )
+
+
+def build_quick_apply_list(opportunities: list[dict]) -> str:
+    lines = ["🟡 تستحق تقديم سريع (بدون تخصيص كبير):"]
+    lines.extend(build_quick_apply_line(item) for item in opportunities)
+    return "\n".join(lines)
+
+
 def build_no_opportunity_message() -> str:
     return """لا توجد فرصة قوية اليوم.
 
@@ -394,13 +408,16 @@ def build_opportunities_message() -> str:
         if get_category(opportunity, get_score(opportunity)) == "🟡 راقب"
     ]
 
-    if apply_now:
-        sections = ["فرص اليوم:"]
-        sections.extend(build_opportunity_section(item) for item in apply_now[:2])
+    if apply_now or fast_apply:
+        sections = []
+        if apply_now:
+            sections.append("فرص اليوم:")
+            sections.extend(build_opportunity_section(item) for item in apply_now[:MAX_APPLY_NOW_JOBS])
+        else:
+            sections.append("لا توجد فرصة ذهبية اليوم.")
+        if fast_apply:
+            sections.append(build_quick_apply_list(fast_apply[:MAX_QUICK_APPLY_JOBS]))
         return "\n\n".join(sections)
-
-    if fast_apply:
-        return "لا توجد فرصة ذهبية اليوم.\n\nلكن هذه تستحق تقديم سريع:\n\n" + build_opportunity_section(fast_apply[0])
 
     if early_signals:
         return "لا توجد فرصة قوية اليوم.\n\nإشارة للمراقبة فقط:\n\n" + build_opportunity_section(early_signals[0])

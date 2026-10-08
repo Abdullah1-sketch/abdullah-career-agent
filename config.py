@@ -53,6 +53,10 @@ STRONG_SCORE = 80   # "apply now"
 MEDIUM_SCORE = 60   # "quick apply"
 WATCH_SCORE = 45    # "watch"
 
+# How many jobs the daily Telegram message shows.
+MAX_APPLY_NOW_JOBS = 5    # full details each
+MAX_QUICK_APPLY_JOBS = 5  # one short line each
+
 TARGET_TITLES = [
     "data analyst",
     "junior data analyst",
