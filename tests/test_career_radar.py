@@ -62,5 +62,21 @@ class CheckSummaryTests(unittest.TestCase):
         self.assertIn(f"{job_search_engine.REJECT_SENIOR_TITLE} 5", message)
 
 
+class CurrentOpportunitiesTests(unittest.TestCase):
+    def test_real_job_descriptions_with_common_words_are_kept(self):
+        job = make_item(
+            "Junior Data Analyst", "Support the team, plan reports, follow privacy terms. Excel and Power BI.", 1
+        )
+        with patch.object(career_radar, "search_market_safely", return_value=[job]), \
+                patch.object(career_radar, "scan_company_career_pages", return_value=[]):
+            self.assertEqual(career_radar.get_current_opportunities(), [job])
+
+    def test_telecom_package_page_from_scanner_is_still_dropped(self):
+        page = make_item("Mobile data packages", "Internet plans", 2)
+        with patch.object(career_radar, "search_market_safely", return_value=[]), \
+                patch.object(career_radar, "scan_company_career_pages", return_value=[page]):
+            self.assertEqual(career_radar.get_current_opportunities(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

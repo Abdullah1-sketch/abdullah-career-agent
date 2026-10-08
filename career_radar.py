@@ -72,15 +72,8 @@ def contains_any(text: str, terms: list[str]) -> bool:
 
 
 def contains_blocked_report_term(item: dict) -> bool:
-    text = " ".join(
-        [
-            item.get("title", ""),
-            item.get("company", ""),
-            item.get("location", ""),
-            item.get("description", ""),
-            item.get("url", ""),
-        ]
-    ).lower()
+    # Title and link only: real job descriptions use words like "support" and "plan".
+    text = f'{item.get("title", "")} {item.get("url", "")}'.lower()
 
     return contains_any(text, BLOCKED_REPORT_TERMS)
 
