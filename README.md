@@ -15,11 +15,40 @@ Phase 1 goal: find strong entry-level data analyst opportunities, rank them, sug
 ```bash
 export TELEGRAM_BOT_TOKEN="your-token"
 export TELEGRAM_CHAT_ID="your-chat-id"
+export SERPAPI_KEY="your-serpapi-key"   # Google job search
 ```
 
-## First Test
+In GitHub Actions these come from repository Secrets with the same names.
+
+## Run
 
 ```bash
-python -m src.main --test-telegram
+pip install -r requirements.txt
+
+# Send today's job report to Telegram (same as the daily GitHub Action)
+python main.py --test-telegram
+
+# Compare the bot's scores with the replies you actually got
+python main.py --review-applications applications.csv
 ```
 
+`applications.csv` is ignored by git (personal data). Copy
+`applications.example.csv` to start. Leave `bot_score` empty to let the bot
+score the row; `status` accepts English or Arabic values
+(تم التقديم / لا رد / رفض / اتصال / مقابلة).
+
+## Tests
+
+```bash
+python -m unittest discover -s tests
+```
+
+`tests/test_scoring.py` holds realistic Saudi job postings with the expected
+apply/skip verdict. Add a posting there whenever the bot gets one wrong.
+
+## Tuning
+
+All scoring lists and weights are in the "Job scoring settings" section of
+`config.py`: titles, skills, entry-level and seniority words, locations, score
+weights, thresholds, jobs per message, and `SEARCHES_PER_RUN` (paid searches
+per day).
