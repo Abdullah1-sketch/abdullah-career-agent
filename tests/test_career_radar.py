@@ -86,7 +86,7 @@ class CheckSummaryTests(unittest.TestCase):
             message = career_radar.build_daily_radar_message()
 
         self.assertIn("📊", message)
-        self.assertIn("9 نتيجة", message)
+        self.assertIn("فحصت 9", message)
         self.assertIn(f"{job_search_engine.REJECT_SENIOR_TITLE} 5", message)
 
 
@@ -126,7 +126,7 @@ class VerifiedRecommendationTests(unittest.TestCase):
     def test_strong_but_unverified_job_is_not_green(self):
         message = message_for(make_item(*STRONG_JOB, 1), verified=False, source="linkedin", status="unknown")
         self.assertNotIn("🟢 قدّم الآن", message)
-        self.assertIn("تحقق قبل التقديم", message)
+        self.assertIn("تحقق أول", message)
         self.assertIn("⚠️", message)
 
     def test_no_outreach_advice_for_unverified_job(self):
@@ -143,7 +143,7 @@ class VerifiedRecommendationTests(unittest.TestCase):
 
     def test_job_asking_three_plus_years_on_original_page_is_not_recommended(self):
         message = message_for(make_item(*STRONG_JOB, 1), years=3)
-        self.assertNotIn("قدّم", message.split("📊")[0].replace("لا توجد فرصة قوية اليوم", ""))
+        self.assertNotIn("قدّم", message.split("📊")[0])
         self.assertIn("تطلب خبرة 3+ 1", message)
 
     def test_missing_platform_skill_is_not_green(self):
@@ -154,13 +154,17 @@ class VerifiedRecommendationTests(unittest.TestCase):
 
     def test_required_experience_is_shown_from_the_posting(self):
         message = message_for(make_item(*STRONG_JOB, 1), years=1)
-        self.assertIn("الخبرة المطلوبة: سنة على الأقل", message)
+        self.assertIn("خبرة: سنة", message)
 
-    def test_ready_message_never_claims_sql(self):
-        item = make_item("Junior Data Analyst", "Fresh graduates. SQL, Excel, Power BI dashboards.", 1)
-        message = message_for(item)
-        ready = message.split("رسالة جاهزة:")[1]
-        self.assertNotIn("SQL", ready)
+    def test_message_is_short(self):
+        items = [make_item(f"Junior Data Analyst {i}", STRONG_JOB[1], i) for i in range(1, 6)]
+        message = messages_for(items)
+        self.assertNotIn("رسالة جاهزة", message)
+        self.assertNotIn("خطة الوصول", message)
+        cards = [block for block in message.split("\n\n") if block.startswith("🟢 ")]
+        self.assertEqual(len(cards), 5)
+        for card in cards:
+            self.assertLessEqual(len(card.splitlines()), 6, card)
 
 
 def messages_for(items, **verification):
@@ -175,28 +179,28 @@ class FitAndReliabilityDisplayTests(unittest.TestCase):
         item = make_item(*STRONG_JOB, 1)
         item["posted_at"] = "3 days ago"
         message = message_for(item)
-        self.assertIn("التوافق:", message)
-        self.assertIn("الموثوقية:", message)
-        self.assertIn("نُشرت: قبل 3 أيام", message)
-        self.assertIn("آخر تحقق: 2026-10-08 20:40", message)
+        self.assertIn("توافق 97", message)
+        self.assertIn("موثوقية ✅", message)
+        self.assertIn("نُشرت قبل 3 أيام", message)
+        self.assertIn("آخر تحقق 2026-10-08 20:40", message)
 
     def test_learning_skill_is_marked_as_not_mastered(self):
         message = message_for(make_item(*STRONG_JOB, 1), learning=["SQL"])
-        self.assertIn("تتعلمها (مو متقنها): SQL", message)
+        self.assertIn("تتعلم: SQL", message)
 
     def test_finance_role_is_flagged_and_not_green(self):
         item = make_item("Strategic FP&A & Financial Reporting Analyst", "Excel and Power BI reporting.", 1)
         message = message_for(item)
         self.assertNotIn("🟢 قدّم الآن", message)
-        self.assertIn("وظيفة مالية", message)
+        self.assertIn("مالية", message)
 
     def test_finance_roles_get_their_own_section(self):
         data_job = make_item(*STRONG_JOB, 1)
         finance_job = make_item("Strategic FP&A & Financial Reporting Analyst", "Excel and Power BI reporting.", 2)
         message = messages_for([data_job, finance_job])
-        other_field = message.split("🔵 خارج تحليل البيانات")[1].split("📊")[0]
+        other_field = message.split("🔵 خارج البيانات")[1].split("📊")[0]
         self.assertIn("FP&A", other_field)
-        self.assertNotIn("FP&A", message.split("🔵 خارج تحليل البيانات")[0])
+        self.assertNotIn("FP&A", message.split("🔵 خارج البيانات")[0])
 
     def test_grouped_jobs_are_counted_once(self):
         first = make_item(*STRONG_JOB, 1)
@@ -204,7 +208,7 @@ class FitAndReliabilityDisplayTests(unittest.TestCase):
         second["company"] = first["company"]
         message = messages_for([first, second])
         self.assertIn("نفس الشركة 1", message)
-        self.assertIn("قدّم الآن 1،", message)
+        self.assertIn("أرسلت 1", message)
 
     def test_old_unconfirmed_posting_is_dropped(self):
         item = make_item(*STRONG_JOB, 1)
@@ -219,8 +223,8 @@ class FitAndReliabilityDisplayTests(unittest.TestCase):
         second = make_item("Junior MIS & Dashboards Analyst", "Fresh graduates. Excel, Power BI dashboards.", 2)
         second["company"] = "JASARA PMC"
         message = messages_for([first, second])
-        self.assertEqual(message.count("\nالشركة: JASARA"), 1)  # one job card for the company
-        self.assertIn("وظائف ثانية في نفس الشركة", message)
+        self.assertEqual(message.count("JASARA"), 1)  # one job card for the company
+        self.assertIn("+ نفس الشركة", message)
         self.assertIn("Junior MIS & Dashboards Analyst", message)
 
 
