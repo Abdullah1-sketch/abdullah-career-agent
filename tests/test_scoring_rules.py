@@ -43,5 +43,34 @@ class SeniorityInTitleOnlyTests(unittest.TestCase):
         self.assertEqual(result["reasons"], [SENIOR_REASON])
 
 
+class ExperienceRangeTests(unittest.TestCase):
+    def assert_not_too_experienced(self, description):
+        result = score(description=description)
+        self.assertNotIn(SENIOR_REASON, result["reasons"], description)
+
+    def assert_too_experienced(self, description):
+        result = score(description=description)
+        self.assertEqual(result["reasons"], [SENIOR_REASON], description)
+
+    def test_low_minimum_ranges_are_accepted(self):
+        self.assert_not_too_experienced("1-3 years of experience in data analysis.")
+        self.assert_not_too_experienced("0-3 years experience with Excel and Power BI.")
+        self.assert_not_too_experienced("2 to 4 years of experience in reporting.")
+        self.assert_not_too_experienced("خبرة من 1 إلى 3 سنوات في تحليل البيانات")
+        self.assert_not_too_experienced("خبرة من ١ إلى ٣ سنوات في تحليل البيانات")
+
+    def test_high_minimum_is_rejected(self):
+        self.assert_too_experienced("3+ years of experience in data analysis.")
+        self.assert_too_experienced("Minimum of 5 years experience in BI.")
+        self.assert_too_experienced("3-5 years of experience in reporting.")
+        self.assert_too_experienced("at least three years of experience with SQL.")
+        self.assert_too_experienced("خبرة عملية تتراوح بين 3 إلى 10 سنوات")
+        self.assert_too_experienced("خبرة لا تقل عن ٣ سنوات")
+        self.assert_too_experienced("خبرة لا تقل عن خمس سنوات")
+
+    def test_years_unrelated_to_experience_are_ignored(self):
+        self.assert_not_too_experienced("Join a company growing for 10 years in Riyadh. Excel reporting.")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -167,32 +167,33 @@ BAD_TITLE_SIGNALS = [
     "رئيس",
 ]
 
-HIGH_EXPERIENCE_SIGNALS = [
-    "3+ years",
-    "4+ years",
-    "5+ years",
-    "6+ years",
-    "7+ years",
-    "8+ years",
-    "10+ years",
-    "minimum 3 years",
-    "minimum of 3 years",
-    "minimum of three years",
-    "at least 3 years",
-    "3 years of experience",
-    "three years of experience",
-    "3 years' experience",
-    "بين 3 إلى 10 سنوات",
-    "بين ٣ إلى ١٠ سنوات",
-    "3 إلى 10 سنوات",
-    "٣ إلى ١٠ سنوات",
-    "خبرة عملية تتراوح بين 3",
-    "خبرة عملية تتراوح بين ٣",
-    "خبرة تتراوح بين 3",
-    "خبرة تتراوح بين ٣",
-    "٣ سنوات",
-    "ثلاث سنوات",
-]
+# A job is too senior when it asks for at least this many years.
+TOO_MANY_YEARS = 3
+# Bigger numbers next to "years" are usually age limits ("22-35 years old").
+MAX_REALISTIC_YEARS = 15
+
+ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "ثلاث": 3, "ثلاثة": 3, "أربع": 4, "اربع": 4, "أربعة": 4, "اربعة": 4,
+    "خمس": 5, "خمسة": 5, "ست": 6, "ستة": 6, "سبع": 7, "سبعة": 7,
+    "ثمان": 8, "ثماني": 8, "ثمانية": 8, "عشر": 10, "عشرة": 10,
+}
+
+NUMBER_WORD_PATTERN = re.compile(
+    r"(?<![a-z\u0600-\u06FF])("
+    + "|".join(sorted(NUMBER_WORDS, key=len, reverse=True))
+    + r")(?![a-z\u0600-\u06FF])"
+)
+
+YEAR_WORD = r"(?:years?|yrs?|سنوات|سنة|سنين|أعوام|عام)"
+RANGE_SEPARATOR = r"(?:-|–|to|إلى|الى|و)"
+YEARS_RANGE_PATTERN = re.compile(rf"(\d+)\s*{RANGE_SEPARATOR}\s*(\d+)\s*\+?\s*{YEAR_WORD}")
+SINGLE_YEARS_PATTERN = re.compile(rf"(\d+)\s*\+?\s*{YEAR_WORD}")
+EXPERIENCE_CONTEXT_PATTERN = re.compile(r"experience|\bexp\b|خبرة|خبره|minimum|at least|لا تقل|\+")
+EXPERIENCE_CONTEXT_WINDOW = 60
 
 STALE_SIGNALS = [
     "posted 2 years ago",
@@ -318,22 +319,40 @@ def is_aggregator_url(url: str) -> bool:
     return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
 
 
+def normalize_numbers(text: str) -> str:
+    text = text.lower().translate(ARABIC_DIGITS)
+    return NUMBER_WORD_PATTERN.sub(lambda match: str(NUMBER_WORDS[match.group(1)]), text)
+
+
+def is_experience_mention(text: str, start: int, end: int) -> bool:
+    window = text[max(0, start - EXPERIENCE_CONTEXT_WINDOW): end + EXPERIENCE_CONTEXT_WINDOW]
+    return EXPERIENCE_CONTEXT_PATTERN.search(window) is not None
+
+
+def required_experience_years(text: str) -> int | None:
+    """Minimum years of experience the job asks for, or None if not stated.
+
+    "1-3 years" -> 1, "3+ years" -> 3. If several are stated, the highest wins.
+    """
+    text = normalize_numbers(text)
+    minimums = []
+
+    for match in YEARS_RANGE_PATTERN.finditer(text):
+        if is_experience_mention(text, match.start(), match.end()):
+            minimums.append(int(match.group(1)))
+    text = YEARS_RANGE_PATTERN.sub(" ", text)
+
+    for match in SINGLE_YEARS_PATTERN.finditer(text):
+        if is_experience_mention(text, match.start(), match.end()):
+            minimums.append(int(match.group(1)))
+
+    realistic = [years for years in minimums if years <= MAX_REALISTIC_YEARS]
+    return max(realistic) if realistic else None
+
+
 def has_high_experience(text: str) -> bool:
-    text = text.lower()
-
-    if contains_any(text, HIGH_EXPERIENCE_SIGNALS):
-        return True
-
-    patterns = [
-        r"(?<!0-)\b([3-9]|10)\s*\+?\s*(years|yrs)\b",
-        r"بين\s*[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
-        r"تتراوح\s+بين\s*[٣3]",
-        r"خبرة\s+عملية\s+تتراوح\s+بين\s*[٣3]",
-        r"خبرة\s+تتراوح\s+بين\s*[٣3]",
-        r"[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
-    ]
-
-    return any(re.search(pattern, text) for pattern in patterns)
+    years = required_experience_years(text)
+    return years is not None and years >= TOO_MANY_YEARS
 
 
 def is_hris_heavy_role(title: str, text: str) -> bool:
