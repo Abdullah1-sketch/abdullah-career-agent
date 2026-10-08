@@ -125,6 +125,7 @@ def translate_reason(reason: str) -> str:
         "Has a clearer path to interview or outreach": "مسار التقديم واضح",
         "May be too senior or outside target path": "قد تكون أعلى من مستواك",
         "Not enough job details to confirm fit": "التفاصيل غير كافية",
+        "Posting looks old or closed": "الإعلان قديم أو مغلق",
         "Posted on a job board: apply on the company site if possible": "منشورة في موقع وظائف: دوّرها في موقع الشركة وقدّم من هناك",
     }.get(reason, reason)
 

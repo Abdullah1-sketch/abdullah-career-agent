@@ -195,20 +195,30 @@ SINGLE_YEARS_PATTERN = re.compile(rf"(\d+)\s*\+?\s*{YEAR_WORD}")
 EXPERIENCE_CONTEXT_PATTERN = re.compile(r"experience|\bexp\b|خبرة|خبره|minimum|at least|لا تقل|\+")
 EXPERIENCE_CONTEXT_WINDOW = 60
 
-STALE_SIGNALS = [
-    "posted 2 years ago",
-    "posted 1 year ago",
-    "posted a year ago",
-    "months ago",
-    "closed",
-    "expired",
+# Phrases that mean the job is closed. Posting age is checked separately.
+CLOSED_POSTING_SIGNALS = [
     "no longer accepting applications",
-    "منذ سنة",
-    "منذ سنتين",
-    "منذ أشهر",
+    "this job has expired",
+    "job has expired",
+    "job expired",
+    "position has been filled",
+    "applications closed",
+    "application closed",
+    "closed for applications",
+    "لم يعد يقبل",
+    "انتهى التقديم",
+    "انتهت فترة التقديم",
+    "الوظيفة منتهية",
+    "تم إغلاق التقديم",
     "مغلق",
     "منتهي",
 ]
+
+# A posting this old (or older) is treated as stale.
+STALE_AFTER_MONTHS = 2
+
+ENGLISH_POSTING_AGE_PATTERN = re.compile(r"(\d+|a|an|one)\s+(month|year)s?\s+ago")
+ARABIC_POSTING_AGE_PATTERN = re.compile(r"منذ\s+(?:(\d+)\s+)?(شهرين|سنتين|أشهر|شهور|شهر|سنوات|سنة|عام)")
 
 HRIS_HEAVY_SIGNALS = [
     "hris",
@@ -358,6 +368,37 @@ def has_high_experience(text: str) -> bool:
     return years is not None and years >= TOO_MANY_YEARS
 
 
+def posting_age_months(text: str) -> int | None:
+    """Age from "posted 3 months ago" / "منذ شهرين". Only months and years matter."""
+    text = text.lower().translate(ARABIC_DIGITS)
+
+    match = ENGLISH_POSTING_AGE_PATTERN.search(text)
+    if match:
+        count = 1 if match.group(1) in ("a", "an", "one") else int(match.group(1))
+        return count * 12 if match.group(2) == "year" else count
+
+    match = ARABIC_POSTING_AGE_PATTERN.search(text)
+    if match:
+        number, unit = match.group(1), match.group(2)
+        if unit == "شهرين":
+            return 2
+        if unit == "سنتين":
+            return 24
+        if unit in ("أشهر", "شهور") and not number:
+            return 3  # "منذ أشهر" = some months
+        count = int(number) if number else 1
+        return count * 12 if unit in ("سنوات", "سنة", "عام") else count
+
+    return None
+
+
+def is_stale_posting(text: str) -> bool:
+    if contains_any(text, CLOSED_POSTING_SIGNALS):
+        return True
+    age = posting_age_months(text)
+    return age is not None and age >= STALE_AFTER_MONTHS
+
+
 def is_hris_heavy_role(title: str, text: str) -> bool:
     title_lower = title.lower()
 
@@ -389,8 +430,8 @@ def score_location(text: str) -> tuple[int, str | None]:
 
 
 def hard_reject_reason(opportunity: Opportunity, full_text: str) -> str | None:
-    if contains_any(full_text, STALE_SIGNALS):
-        return "Not enough job details to confirm fit"
+    if is_stale_posting(full_text):
+        return "Posting looks old or closed"
 
     if contains_any(opportunity.title, BAD_TITLE_SIGNALS) or has_high_experience(full_text):
         return "May be too senior or outside target path"

@@ -2,7 +2,7 @@ import unittest
 
 from career_radar import is_low_quality_item
 from interview_path import recommend_interview_path
-from opportunity_scoring import ENTRY_LEVEL_BONUS, Opportunity, score_opportunity
+from opportunity_scoring import ENTRY_LEVEL_BONUS, Opportunity, is_stale_posting, score_opportunity
 
 SENIOR_REASON = "May be too senior or outside target path"
 AGGREGATOR_REASON = "Posted on a job board: apply on the company site if possible"
@@ -108,6 +108,35 @@ class MissingLevelWordTests(unittest.TestCase):
         without_level = score(description="Excel reporting.", **plain)["score"]
         with_junior = score(description="Junior role. Excel reporting.", **plain)["score"]
         self.assertEqual(with_junior - without_level, ENTRY_LEVEL_BONUS)
+
+
+class StaleJobTests(unittest.TestCase):
+    def assert_stale(self, description):
+        self.assertTrue(is_stale_posting(description), description)
+
+    def assert_fresh(self, description):
+        self.assertFalse(is_stale_posting(description), description)
+
+    def test_normal_words_are_not_stale(self):
+        self.assert_fresh("Track closed deals and enclosed reports in Power BI.")
+        self.assert_fresh("Prepare monthly reports; dashboards refreshed every 3 months.")
+        self.assert_fresh("Posted 1 month ago")
+        self.assert_fresh("Posted 2 weeks ago")
+        self.assert_fresh("نُشرت منذ شهر")
+
+    def test_old_or_closed_postings_are_stale(self):
+        self.assert_stale("Posted 3 months ago")
+        self.assert_stale("Posted 2 years ago")
+        self.assert_stale("No longer accepting applications")
+        self.assert_stale("This job has expired")
+        self.assert_stale("نُشرت منذ شهرين")
+        self.assert_stale("منذ 4 أشهر")
+        self.assert_stale("منذ سنة")
+        self.assert_stale("انتهى التقديم")
+
+    def test_stale_job_gets_clear_reason(self):
+        result = score(description="Excel reporting. No longer accepting applications.")
+        self.assertEqual(result["reasons"], ["Posting looks old or closed"])
 
 
 if __name__ == "__main__":
