@@ -1,196 +1,165 @@
+import io
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 import job_search_engine as engine
-
-LINKEDIN_URL = "https://www.linkedin.com/jobs/view/4012345678"
-
-
-def check_result(title, snippet, page_text, url=LINKEDIN_URL):
-    with patch.object(engine, "fetch_page_text", return_value=page_text.lower()):
-        return engine.is_good_result(title, snippet, url)
+from config import SEARCHES_PER_RUN
 
 
-class ResultFilterTests(unittest.TestCase):
-    """The search filter must use the same rules as the scorer."""
-
-    def test_junior_job_page_mentioning_senior_jobs_elsewhere_is_kept(self):
-        page = (
-            "Junior Data Analyst. Riyadh. 0-2 years of experience. Excel, Power BI. "
-            "You will report to the analytics manager. "
-            "Similar jobs: Senior Data Analyst, Lead BI Developer"
-        )
-        self.assertTrue(check_result("Junior Data Analyst", "Riyadh, Saudi Arabia. Excel and Power BI.", page))
-
-    def test_one_to_three_years_is_kept(self):
-        page = "Data Analyst. Riyadh. 1-3 years of experience in data analysis. Excel, Power BI."
-        self.assertTrue(check_result("Data Analyst", "Riyadh, Saudi Arabia. Data analysis.", page))
-
-    def test_three_plus_years_is_dropped(self):
-        page = "Data Analyst. Riyadh. 3+ years of experience in data analysis."
-        self.assertFalse(check_result("Data Analyst", "Riyadh, Saudi Arabia. Data analysis.", page))
-
-    def test_senior_title_is_dropped(self):
-        self.assertFalse(check_result("Senior Data Analyst", "Riyadh, Saudi Arabia. Data analysis.", ""))
-
-    def test_old_jobs_in_similar_jobs_section_do_not_make_it_stale(self):
-        page = "Data Analyst. Riyadh. Excel reporting. Similar jobs: BI Analyst, posted 3 months ago"
-        self.assertTrue(check_result("Data Analyst", "Riyadh, Saudi Arabia. 1 week ago. Excel.", page))
-
-    def test_closed_job_page_is_dropped(self):
-        page = "Data Analyst. Riyadh. No longer accepting applications."
-        self.assertFalse(check_result("Data Analyst", "Riyadh, Saudi Arabia. Excel reporting.", page))
-
-    def test_rejection_reasons_are_specific(self):
-        with patch.object(engine, "fetch_page_text", return_value=""):
-            reason = engine.result_rejection_reason
-            self.assertEqual(reason("Senior Data Analyst", "Riyadh. Data.", LINKEDIN_URL), engine.REJECT_SENIOR_TITLE)
-            self.assertEqual(reason("Data Analyst", "Riyadh. 3+ years of experience. Data.", LINKEDIN_URL),
-                             engine.REJECT_HIGH_EXPERIENCE)
-            self.assertEqual(reason("Sales Executive", "Riyadh. Sales targets.", LINKEDIN_URL), engine.REJECT_NOT_DATA)
-            self.assertEqual(reason("Data Analyst", "Dubai. Excel reporting.", LINKEDIN_URL), engine.REJECT_LOCATION)
-            self.assertIsNone(reason("Data Analyst", "Riyadh. Excel reporting.", LINKEDIN_URL))
-
-
-class LinkedInTitleTests(unittest.TestCase):
-    def test_hiring_format(self):
-        parsed = engine.parse_linkedin_title(
-            "Riyadh Pay hiring Junior Data Analyst in Riyadh, Riyadh, Saudi Arabia | LinkedIn"
-        )
-        self.assertEqual(parsed, ("Junior Data Analyst", "Riyadh Pay", "Riyadh, Riyadh, Saudi Arabia"))
-
-    def test_dash_format(self):
-        parsed = engine.parse_linkedin_title("BI Analyst - Eastern Health Services - LinkedIn")
-        self.assertEqual(parsed, ("BI Analyst", "Eastern Health Services", ""))
-
-    def test_unknown_format_returns_none(self):
-        self.assertIsNone(engine.parse_linkedin_title("Data Analyst"))
+def google_job(
+    title="Junior Data Analyst",
+    company="Riyadh Pay",
+    location="Riyadh Saudi Arabia",
+    description="Build Excel and Power BI dashboards. 0-2 years of experience.",
+    apply_links=("https://boards.greenhouse.io/riyadhpay/jobs/1",),
+    posted="3 days ago",
+):
+    return {
+        "title": title,
+        "company_name": company,
+        "location": location,
+        "description": description,
+        "via": "LinkedIn",
+        "detected_extensions": {"posted_at": posted} if posted else {},
+        "apply_options": [{"title": "Apply", "link": link} for link in apply_links],
+        "share_link": "https://www.google.com/search?ibp=htl;jobs#job1",
+    }
 
 
 class FakeResponse:
-    def __init__(self, data):
+    def __init__(self, data, status_code=200):
         self.data = data
-
-    def raise_for_status(self):
-        pass
+        self.status_code = status_code
 
     def json(self):
         return self.data
 
 
-class SerpApiSearchTests(unittest.TestCase):
-    def search(self, data):
-        with patch.dict("os.environ", {"SERPAPI_KEY": "test-key"}), \
-                patch.object(engine.requests, "get", return_value=FakeResponse(data)), \
-                patch.object(engine, "fetch_page_text", return_value="excel and power bi reporting"):
-            return engine.serpapi_search("any query")
+def run_search(data=None, env=None, get=None):
+    """Run the daily search with a fake SerpApi. Returns (results, request params, printed output)."""
+    captured = []
 
-    def test_linkedin_result_uses_real_company_and_title(self):
-        results = self.search({"organic_results": [{
-            "title": "Riyadh Pay hiring Junior Data Analyst in Riyadh, Saudi Arabia | LinkedIn",
-            "snippet": "Excel, Power BI and SQL reporting. 0-2 years.",
-            "link": LINKEDIN_URL,
-        }]})
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["title"], "Junior Data Analyst")
-        self.assertEqual(results[0]["company"], "Riyadh Pay")
-        self.assertEqual(results[0]["location"], "الرياض")
+    def fake_get(url, params=None, timeout=None):
+        captured.append(params)
+        return FakeResponse(data or {"jobs_results": []})
 
-    def test_search_counts_found_and_rejected_results(self):
-        engine.SEARCH_STATS.clear()
-        self.search({"organic_results": [
-            {"title": "Riyadh Pay hiring Junior Data Analyst in Riyadh, Saudi Arabia | LinkedIn",
-             "snippet": "Excel and Power BI.", "link": LINKEDIN_URL},
-            {"title": "Riyadh Pay hiring Senior Data Analyst in Riyadh, Saudi Arabia | LinkedIn",
-             "snippet": "Excel and Power BI.", "link": "https://www.linkedin.com/jobs/view/4000000001"},
-        ]})
+    output = io.StringIO()
+    with patch.dict("os.environ", env if env is not None else {"SERPAPI_KEY": "test-key"}, clear=True), \
+            patch.object(engine.requests, "get", get or fake_get), redirect_stdout(output):
+        results = engine.search_market_opportunities()
+    return results, captured, output.getvalue()
+
+
+class GoogleJobsRequestTests(unittest.TestCase):
+    def test_uses_google_jobs_in_saudi_arabia(self):
+        _, captured, _ = run_search()
+        self.assertEqual(len(captured), SEARCHES_PER_RUN)
+        for params in captured:
+            self.assertEqual(params["engine"], "google_jobs")
+            self.assertEqual(params["gl"], "sa")
+            self.assertEqual(params["location"], "Saudi Arabia")
+            self.assertIn(params["q"], engine.SEARCH_QUERIES)
+
+
+class JobConversionTests(unittest.TestCase):
+    def test_job_fields_are_kept(self):
+        job = engine.to_opportunity(google_job())
+        self.assertEqual(job["title"], "Junior Data Analyst")
+        self.assertEqual(job["company"], "Riyadh Pay")
+        self.assertEqual(job["location"], "Riyadh Saudi Arabia")
+        self.assertIn("Power BI", job["description"])
+        self.assertIn("Posted 3 days ago", job["description"])
+
+    def test_company_site_link_is_preferred(self):
+        job = engine.to_opportunity(google_job(apply_links=(
+            "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/",
+            "https://www.linkedin.com/jobs/view/4012345678",
+            "https://careers.riyadhpay.sa/jobs/1",
+        )))
+        self.assertEqual(job["url"], "https://careers.riyadhpay.sa/jobs/1")
+
+    def test_linkedin_is_preferred_over_job_boards(self):
+        job = engine.to_opportunity(google_job(apply_links=(
+            "https://www.bayt.com/en/saudi-arabia/jobs/data-analyst-1/",
+            "https://www.linkedin.com/jobs/view/4012345678",
+        )))
+        self.assertEqual(job["url"], "https://www.linkedin.com/jobs/view/4012345678")
+
+    def test_google_link_when_no_apply_option(self):
+        job = engine.to_opportunity(google_job(apply_links=()))
+        self.assertEqual(job["url"], "https://www.google.com/search?ibp=htl;jobs#job1")
+
+
+class RejectionReasonTests(unittest.TestCase):
+    def reason(self, **kwargs):
+        return engine.job_rejection_reason(engine.to_opportunity(google_job(**kwargs)))
+
+    def test_good_junior_job_is_kept(self):
+        self.assertIsNone(self.reason())
+
+    def test_reasons_are_specific(self):
+        self.assertEqual(self.reason(title="Senior Data Analyst"), engine.REJECT_SENIOR_TITLE)
+        self.assertEqual(self.reason(description="Excel reporting. 3+ years of experience."),
+                         engine.REJECT_HIGH_EXPERIENCE)
+        self.assertEqual(self.reason(title="Sales Executive", description="Meet sales targets."),
+                         engine.REJECT_NOT_DATA)
+        self.assertEqual(self.reason(location="Dubai - United Arab Emirates"), engine.REJECT_LOCATION)
+        self.assertEqual(self.reason(posted="2 months ago"), engine.REJECT_OLD)
+
+    def test_manager_in_description_is_fine(self):
+        self.assertIsNone(self.reason(description="Excel and Power BI reports for the finance manager."))
+
+
+class SearchRunTests(unittest.TestCase):
+    def test_counts_found_kept_and_rejected(self):
+        data = {"jobs_results": [google_job(), google_job(title="Senior Data Analyst")]}
+        results, _, _ = run_search(data)
         stats = engine.get_search_stats()
-        self.assertEqual(stats["found"], 2)
-        self.assertEqual(stats["kept"], 1)
-        self.assertEqual(stats["rejected"], {engine.REJECT_SENIOR_TITLE: 1})
+        self.assertEqual(stats["found"], 2 * SEARCHES_PER_RUN)
+        self.assertEqual(stats["kept"], SEARCHES_PER_RUN)
+        self.assertEqual(stats["rejected"], {engine.REJECT_SENIOR_TITLE: SEARCHES_PER_RUN})
+        self.assertEqual(len(results), 1)  # same job from every query is kept once
 
-    def test_each_result_is_logged_with_its_decision(self):
-        import io
-        from contextlib import redirect_stdout
+    def test_github_actions_gets_one_notice_with_all_results(self):
+        data = {"jobs_results": [google_job()]}
+        _, _, output = run_search(data, env={"SERPAPI_KEY": "k", "GITHUB_ACTIONS": "true"})
+        notices = [line for line in output.splitlines() if line.startswith("::notice")]
+        self.assertEqual(len(notices), 1)
+        self.assertIn("Junior Data Analyst", notices[0])
 
-        output = io.StringIO()
-        with redirect_stdout(output):
-            self.search({"organic_results": [
-                {"title": "Data Analyst Jobs in Dammam (25 new)", "snippet": "Data analyst jobs.",
-                 "link": "https://sa.linkedin.com/jobs/data-analyst-jobs-dammam"},
-            ]})
-        log = output.getvalue()
-        self.assertIn(engine.REJECT_NOT_JOB_PAGE, log)
-        self.assertIn("https://sa.linkedin.com/jobs/data-analyst-jobs-dammam", log)
 
-    def test_serpapi_error_is_reported(self):
-        engine.SEARCH_PROBLEMS.clear()
-        self.search({"error": "Your account has run out of searches."})
-        self.assertIn("SerpApi: Your account has run out of searches.", engine.get_search_problems())
-
+class SearchProblemTests(unittest.TestCase):
     def test_missing_key_is_reported(self):
-        engine.SEARCH_PROBLEMS.clear()
-        with patch.dict("os.environ", {}, clear=True):
-            engine.serpapi_search("any query")
+        run_search(env={})
         self.assertTrue(any("SERPAPI_KEY" in problem for problem in engine.get_search_problems()))
 
-    def run_with_get(self, get_mock):
-        engine.SEARCH_PROBLEMS.clear()
-        with patch.dict("os.environ", {"SERPAPI_KEY": "secret-key-123"}), \
-                patch.object(engine.requests, "get", get_mock):
-            engine.serpapi_search("any query")
-        return " ".join(engine.get_search_problems())
+    def test_serpapi_error_is_reported(self):
+        run_search({"error": "Your account has run out of searches."})
+        self.assertIn("SerpApi: Your account has run out of searches.", engine.get_search_problems())
+
+    def test_no_jobs_reply_is_not_a_problem(self):
+        run_search({"error": "Google hasn't returned any results for this query."})
+        self.assertEqual(engine.get_search_problems(), [])
 
     def test_timeout_reason_is_reported_without_the_key(self):
         def raise_timeout(*args, **kwargs):
-            raise engine.requests.Timeout(
-                "Read timed out: https://serpapi.com/search.json?api_key=secret-key-123"
-            )
-        problems = self.run_with_get(raise_timeout)
+            raise engine.requests.Timeout("Read timed out: https://serpapi.com/search.json?api_key=test-key")
+
+        run_search(get=raise_timeout)
+        problems = " ".join(engine.get_search_problems())
         self.assertIn("Timeout", problems)
-        self.assertNotIn("secret-key-123", problems)
+        self.assertNotIn("test-key", problems)
 
     def test_non_json_reply_reports_status_code(self):
         class HtmlResponse:
             status_code = 502
-            text = "<html>Bad Gateway</html>"
 
             def json(self):
                 raise ValueError("not json")
 
-        problems = self.run_with_get(lambda *args, **kwargs: HtmlResponse())
-        self.assertIn("502", problems)
-
-    def test_daily_search_asks_for_ten_results_per_query(self):
-        captured = []
-
-        def fake_get(url, params=None, timeout=None):
-            captured.append(params)
-            return FakeResponse({"organic_results": []})
-
-        with patch.dict("os.environ", {"SERPAPI_KEY": "test-key"}), \
-                patch.object(engine.requests, "get", fake_get):
-            engine.search_market_opportunities()
-        self.assertTrue(captured)
-        self.assertTrue(all(params["num"] == 10 for params in captured))
-
-    def test_github_actions_gets_one_notice_with_all_results(self):
-        import io
-        from contextlib import redirect_stdout
-
-        def fake_get(url, params=None, timeout=None):
-            return FakeResponse({"organic_results": [
-                {"title": "Data Analyst Jobs in Dammam (25 new)", "snippet": "Jobs.",
-                 "link": "https://sa.linkedin.com/jobs/data-analyst-jobs-dammam"},
-            ]})
-
-        output = io.StringIO()
-        with patch.dict("os.environ", {"SERPAPI_KEY": "k", "GITHUB_ACTIONS": "true"}), \
-                patch.object(engine.requests, "get", fake_get), redirect_stdout(output):
-            engine.search_market_opportunities()
-        notices = [line for line in output.getvalue().splitlines() if line.startswith("::notice")]
-        self.assertEqual(len(notices), 1)
-        self.assertIn("data-analyst-jobs-dammam", notices[0])
+        run_search(get=lambda *args, **kwargs: HtmlResponse())
+        self.assertIn("502", " ".join(engine.get_search_problems()))
 
 
 class QueryPlanTests(unittest.TestCase):
