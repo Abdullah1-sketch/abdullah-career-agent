@@ -300,6 +300,9 @@ def term_in_text(term: str, text: str) -> bool:
     return re.search(pattern, text) is not None
 
 
+ENTRY_LEVEL_BONUS = 18
+
+
 def contains_any(text: str, terms: list[str]) -> bool:
     text = text.lower()
     return any(term_in_text(term.lower(), text) for term in terms)
@@ -444,11 +447,10 @@ def score_opportunity(opportunity: Opportunity) -> dict:
         score += 18
         add_reason(reasons, "Relevant data-analysis title")
 
+    # Most Saudi postings don't say "junior", so missing level words is neutral.
     if contains_any(full_text, ENTRY_LEVEL_SIGNALS):
-        score += 18
+        score += ENTRY_LEVEL_BONUS
         add_reason(reasons, "Matches Abdullah's entry-level path")
-    else:
-        score -= 8
 
     if contains_any(full_text, ABDULLAH_CURRENT_SKILLS):
         score += 22

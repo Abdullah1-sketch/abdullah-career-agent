@@ -2,7 +2,7 @@ import unittest
 
 from career_radar import is_low_quality_item
 from interview_path import recommend_interview_path
-from opportunity_scoring import Opportunity, score_opportunity
+from opportunity_scoring import ENTRY_LEVEL_BONUS, Opportunity, score_opportunity
 
 SENIOR_REASON = "May be too senior or outside target path"
 AGGREGATOR_REASON = "Posted on a job board: apply on the company site if possible"
@@ -100,6 +100,14 @@ class AggregatorLinkTests(unittest.TestCase):
         opportunity = {"title": "Junior Data Analyst", "url": self.JOB_BOARD_URL}
         path = recommend_interview_path(opportunity, {"score": 82, "priority": "Strong"})
         self.assertIn("Find the original posting on the company site and apply there", path["actions"])
+
+
+class MissingLevelWordTests(unittest.TestCase):
+    def test_no_level_words_is_neutral(self):
+        plain = dict(title="Data Analyst", location="", url="https://example-company.sa/123")
+        without_level = score(description="Excel reporting.", **plain)["score"]
+        with_junior = score(description="Junior role. Excel reporting.", **plain)["score"]
+        self.assertEqual(with_junior - without_level, ENTRY_LEVEL_BONUS)
 
 
 if __name__ == "__main__":
