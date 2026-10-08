@@ -5,6 +5,16 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from config import BAD_TITLE_SIGNALS
+from opportunity_scoring import (
+    CLOSED_POSTING_SIGNALS,
+    contains_any,
+    has_high_experience,
+    is_hris_heavy_role,
+    is_process_only_business_role,
+    is_stale_posting,
+)
+
 
 SERPAPI_URL = "https://serpapi.com/search.json"
 
@@ -119,112 +129,6 @@ LOCATION_TERMS = [
     "السعودية",
 ]
 
-BAD_TERMS = [
-    "senior",
-    "lead",
-    "manager",
-    "director",
-    "principal",
-    "head of",
-    "5+",
-    "6+",
-    "7+",
-    "8+",
-    "10+",
-    "minimum of three years",
-    "minimum of 3 years",
-    "three years of experience",
-    "3 years of experience",
-    "3 years' experience",
-    "3+ years",
-    "3 years",
-    "minimum 3 years",
-    "at least 3 years",
-    "بين 3 إلى 10 سنوات",
-    "بين ٣ إلى ١٠ سنوات",
-    "3 إلى 10 سنوات",
-    "٣ إلى ١٠ سنوات",
-    "خبرة عملية تتراوح بين 3",
-    "خبرة عملية تتراوح بين ٣",
-    "خبرة تتراوح بين 3",
-    "خبرة تتراوح بين ٣",
-    "data engineer",
-    "data scientist",
-    "machine learning engineer",
-]
-
-STALE_TERMS = [
-    "posted 2 years ago",
-    "posted 1 year ago",
-    "posted a year ago",
-    "posted over",
-    "months ago",
-    "closed",
-    "expired",
-    "no longer accepting applications",
-    "لم يعد",
-    "منذ سنة",
-    "منذ سنتين",
-    "منذ أشهر",
-    "مغلق",
-    "منتهي",
-]
-
-HRIS_HEAVY_TERMS = [
-    "hris",
-    "oracle hcm",
-    "workday",
-    "sap successfactors",
-    "successfactors",
-    "gosi",
-    "qiwa",
-    "mudad",
-    "muqeem",
-    "absher",
-    "nitaqat",
-    "saudization",
-    "employee master data",
-    "hr data integrity",
-    "قوى",
-    "مدد",
-    "مقيم",
-    "أبشر",
-    "نطاقات",
-    "التأمينات",
-    "سعودة",
-]
-
-PROCESS_ONLY_TERMS = [
-    "business process documentation",
-    "process documentation",
-    "workflow diagrams",
-    "business process mapping",
-    "as-is",
-    "to-be",
-    "visio",
-    "mega",
-    "manuals",
-]
-
-STRONG_ANALYTICS_TERMS = [
-    "data analyst",
-    "bi analyst",
-    "business intelligence",
-    "reporting analyst",
-    "analytics analyst",
-    "hr analytics",
-    "dashboard",
-    "dashboards",
-    "power bi",
-    "sql",
-    "kpi",
-    "metrics",
-    "data visualization",
-    "محلل بيانات",
-    "ذكاء أعمال",
-    "تقارير",
-]
-
 GENERIC_TITLE_TERMS = [
     "jobs in",
     "job in",
@@ -283,11 +187,6 @@ COMPANY_LABELS = {
 }
 
 
-def contains_any(text: str, terms: list[str]) -> bool:
-    text = text.lower()
-    return any(term.lower() in text for term in terms)
-
-
 def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
 
@@ -303,20 +202,6 @@ def get_domain(url: str) -> str:
 def is_aggregator_url(url: str) -> bool:
     domain = get_domain(url)
     return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
-
-
-def has_arabic_high_experience(text: str) -> bool:
-    text = text.lower()
-
-    patterns = [
-        r"بين\s*[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
-        r"تتراوح\s+بين\s*[٣3]",
-        r"خبرة\s+عملية\s+تتراوح\s+بين\s*[٣3]",
-        r"خبرة\s+تتراوح\s+بين\s*[٣3]",
-        r"[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
-    ]
-
-    return any(re.search(pattern, text) for pattern in patterns)
 
 
 def is_direct_job_url(url: str) -> bool:
@@ -346,33 +231,6 @@ def is_generic_search_result(title: str, url: str) -> bool:
         return True
 
     return False
-
-
-def is_stale_result(text: str) -> bool:
-    return contains_any(text, STALE_TERMS)
-
-
-def is_process_only_business_role(title: str, text: str) -> bool:
-    title_lower = title.lower()
-
-    if "business analyst" not in title_lower:
-        return False
-
-    has_process_only_terms = contains_any(text, PROCESS_ONLY_TERMS)
-    has_strong_analytics_terms = contains_any(text, STRONG_ANALYTICS_TERMS)
-
-    return has_process_only_terms and not has_strong_analytics_terms
-
-
-def is_hris_heavy_role(title: str, text: str) -> bool:
-    title_lower = title.lower()
-
-    is_hr_role = any(
-        term in title_lower
-        for term in ["hr data", "hr analytics", "people analytics", "workforce analytics"]
-    )
-
-    return is_hr_role and contains_any(text, HRIS_HEAVY_TERMS)
 
 
 def fetch_page_html(url: str) -> str:
@@ -496,38 +354,28 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
     if is_generic_search_result(title, url):
         return False
 
-    if is_stale_result(combined):
+    if contains_any(title, BAD_TITLE_SIGNALS):
         return False
 
-    if contains_any(combined, BAD_TERMS):
-        return False
-
-    if has_arabic_high_experience(combined):
+    if is_stale_posting(combined) or has_high_experience(combined):
         return False
 
     has_target_title = contains_any(combined, TARGET_TITLE_TERMS)
     has_data_context = contains_any(combined, DATA_CONTEXT_TERMS)
     has_location = contains_any(combined, LOCATION_TERMS)
 
-    if not has_target_title:
+    if not (has_target_title and has_data_context and has_location):
         return False
 
-    if not has_data_context:
-        return False
-
-    if not has_location:
-        return False
-
+    # The job page can also list other jobs ("Similar jobs"), so only explicit
+    # closure and experience requirements are read from it, not titles or ages.
     page_text = fetch_page_text(url)
     full_text = f"{combined} {page_text}"
 
-    if is_stale_result(full_text):
+    if contains_any(page_text, CLOSED_POSTING_SIGNALS):
         return False
 
-    if contains_any(full_text, BAD_TERMS):
-        return False
-
-    if has_arabic_high_experience(full_text):
+    if has_high_experience(full_text):
         return False
 
     if is_hris_heavy_role(title, full_text):
