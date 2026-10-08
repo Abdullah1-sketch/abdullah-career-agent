@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import re
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -41,10 +43,12 @@ ADJACENT_ANALYTICS_TITLES = [
     "operations analyst",
     "commercial analyst",
     "product analyst",
+    "statistician",
     "محلل أعمال",
     "محلل أداء",
     "محلل عمليات",
     "محلل موارد بشرية",
+    "إحصائي",
 ]
 
 DATA_CONTEXT_SIGNALS = [
@@ -66,12 +70,15 @@ DATA_CONTEXT_SIGNALS = [
     "visualization",
     "data quality",
     "predictive",
+    "statistical",
+    "statistics",
     "تحليل",
     "بيانات",
     "تقارير",
     "لوحات",
     "مؤشرات",
     "ذكاء الأعمال",
+    "إحصاء",
 ]
 
 ENTRY_LEVEL_SIGNALS = [
@@ -149,11 +156,6 @@ BAD_SIGNALS = [
     "principal",
     "staff",
     "head of",
-    "5+ years",
-    "6+ years",
-    "7+ years",
-    "8+ years",
-    "10+ years",
     "machine learning engineer",
     "data engineer",
     "database administrator",
@@ -161,6 +163,87 @@ BAD_SIGNALS = [
     "مدير",
     "خبير",
     "رئيس",
+]
+
+HIGH_EXPERIENCE_SIGNALS = [
+    "3+ years",
+    "4+ years",
+    "5+ years",
+    "6+ years",
+    "7+ years",
+    "8+ years",
+    "10+ years",
+    "minimum 3 years",
+    "minimum of 3 years",
+    "minimum of three years",
+    "at least 3 years",
+    "3 years of experience",
+    "three years of experience",
+    "3 years' experience",
+    "٣ سنوات",
+    "ثلاث سنوات",
+]
+
+STALE_SIGNALS = [
+    "posted 2 years ago",
+    "posted 1 year ago",
+    "posted a year ago",
+    "months ago",
+    "closed",
+    "expired",
+    "no longer accepting applications",
+    "منذ سنة",
+    "منذ سنتين",
+    "منذ أشهر",
+    "مغلق",
+    "منتهي",
+]
+
+HRIS_HEAVY_SIGNALS = [
+    "hris",
+    "oracle hcm",
+    "workday",
+    "sap successfactors",
+    "successfactors",
+    "gosi",
+    "qiwa",
+    "mudad",
+    "muqeem",
+    "absher",
+    "nitaqat",
+    "saudization",
+    "employee master data",
+    "hr data integrity",
+    "قوى",
+    "مدد",
+    "مقيم",
+    "أبشر",
+    "نطاقات",
+    "التأمينات",
+    "سعودة",
+]
+
+PROCESS_ONLY_SIGNALS = [
+    "business process documentation",
+    "process documentation",
+    "workflow diagrams",
+    "business process mapping",
+    "as-is",
+    "to-be",
+    "visio",
+    "mega",
+    "manuals",
+]
+
+AGGREGATOR_DOMAINS = [
+    "jooble.org",
+    "indeed.com",
+    "bayt.com",
+    "naukrigulf.com",
+    "glassdoor.com",
+    "bebee.com",
+    "trabajo.org",
+    "learn4good.com",
 ]
 
 INTERVIEW_PATH_SIGNALS = [
@@ -171,14 +254,15 @@ INTERVIEW_PATH_SIGNALS = [
     "recruiter",
     "hiring",
     "talent acquisition",
-    "linkedin.com/jobs",
+    "linkedin.com/jobs/view",
     "greenhouse",
     "lever",
     "ashby",
-    "workday",
+    "workdayjobs",
     "oraclecloud",
     "successfactors",
     "smartrecruiters",
+    "careers-page",
     "تقديم",
     "توظيف",
     "وظائف",
@@ -186,14 +270,15 @@ INTERVIEW_PATH_SIGNALS = [
 
 LOCATION_WEIGHTS = [
     (["riyadh", "الرياض"], 20, "Location fits Riyadh priority"),
+    (["eastern province", "eastern", "dammam", "khobar", "dhahran", "الشرقية", "الدمام", "الخبر", "الظهران"], 18, "Location fits Eastern Province priority"),
     (["qassim", "buraydah", "unaizah", "القصيم", "بريدة", "عنيزة"], 16, "Location fits Qassim priority"),
-    (["eastern province", "eastern", "dammam", "khobar", "dhahran", "الشرقية", "الدمام", "الخبر", "الظهران"], 12, "Location fits Eastern Province priority"),
     (["saudi arabia", "ksa", "السعودية"], 8, "Location fits Saudi Arabia preferences"),
     (["remote", "hybrid", "عن بعد", "هجين"], 6, "Remote option may fit"),
 ]
 
 
 def contains_any(text: str, terms: list[str]) -> bool:
+    text = text.lower()
     return any(term.lower() in text for term in terms)
 
 
@@ -202,11 +287,70 @@ def add_reason(reasons: list[str], reason: str | None) -> None:
         reasons.append(reason)
 
 
+def get_domain(url: str) -> str:
+    return urlparse(url).netloc.lower().replace("www.", "")
+
+
+def is_aggregator_url(url: str) -> bool:
+    domain = get_domain(url)
+    return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
+
+
+def has_high_experience(text: str) -> bool:
+    if contains_any(text, HIGH_EXPERIENCE_SIGNALS):
+        return True
+
+    pattern = r"(?<!0-)\b([3-9]|10)\s*\+?\s*(years|yrs|سنوات)\b"
+    return re.search(pattern, text.lower()) is not None
+
+
+def is_hris_heavy_role(title: str, text: str) -> bool:
+    title_lower = title.lower()
+
+    is_hr_role = any(
+        term in title_lower
+        for term in ["hr data", "hr analytics", "people analytics", "workforce analytics", "محلل موارد بشرية"]
+    )
+
+    return is_hr_role and contains_any(text, HRIS_HEAVY_SIGNALS)
+
+
+def is_process_only_business_role(title: str, text: str) -> bool:
+    title_lower = title.lower()
+
+    if "business analyst" not in title_lower and "محلل أعمال" not in title_lower:
+        return False
+
+    has_process_only = contains_any(text, PROCESS_ONLY_SIGNALS)
+    has_data_context = contains_any(text, DATA_CONTEXT_SIGNALS)
+
+    return has_process_only and not has_data_context
+
+
 def score_location(text: str) -> tuple[int, str | None]:
     for terms, points, reason in LOCATION_WEIGHTS:
         if contains_any(text, terms):
             return points, reason
     return 0, None
+
+
+def hard_reject_reason(opportunity: Opportunity, full_text: str) -> str | None:
+    if opportunity.url and is_aggregator_url(opportunity.url):
+        return "Not enough job details to confirm fit"
+
+    if contains_any(full_text, STALE_SIGNALS):
+        return "Not enough job details to confirm fit"
+
+    if contains_any(full_text, BAD_SIGNALS) or has_high_experience(full_text):
+        return "May be too senior or outside target path"
+
+    if is_hris_heavy_role(opportunity.title, full_text):
+        return "May be too senior or outside target path"
+
+    if is_process_only_business_role(opportunity.title, full_text):
+        return "Not enough job details to confirm fit"
+
+    return None
 
 
 def score_opportunity(opportunity: Opportunity) -> dict:
@@ -221,6 +365,15 @@ def score_opportunity(opportunity: Opportunity) -> dict:
         ]
     ).lower()
 
+    reject_reason = hard_reject_reason(opportunity, full_text)
+
+    if reject_reason:
+        return {
+            "score": 0,
+            "priority": "Low",
+            "reasons": [reject_reason],
+        }
+
     score = 0
     reasons = []
 
@@ -231,28 +384,30 @@ def score_opportunity(opportunity: Opportunity) -> dict:
     has_data_context = contains_any(full_text, DATA_CONTEXT_SIGNALS)
 
     if has_direct_title:
-        score += 40
+        score += 38
         add_reason(reasons, "Relevant data-analysis title")
     elif has_adjacent_title and has_data_context:
-        score += 35
+        score += 30
         add_reason(reasons, "Relevant data-analysis title")
     elif has_direct_title_in_text:
-        score += 25
+        score += 24
         add_reason(reasons, "Relevant data-analysis title")
     elif has_adjacent_title_in_text and has_data_context:
-        score += 22
+        score += 18
         add_reason(reasons, "Relevant data-analysis title")
 
     if contains_any(full_text, ENTRY_LEVEL_SIGNALS):
-        score += 15
+        score += 18
         add_reason(reasons, "Matches Abdullah's entry-level path")
+    else:
+        score -= 8
 
     if contains_any(full_text, ABDULLAH_CURRENT_SKILLS):
-        score += 25
+        score += 22
         add_reason(reasons, "Matches Abdullah's current skills")
 
     if contains_any(full_text, ABDULLAH_GROWING_SKILLS):
-        score += 10
+        score += 8
         add_reason(reasons, "Matches Abdullah's SQL learning path")
 
     location_score, location_reason = score_location(full_text)
@@ -261,29 +416,26 @@ def score_opportunity(opportunity: Opportunity) -> dict:
         add_reason(reasons, location_reason)
 
     if contains_any(full_text, INTERVIEW_PATH_SIGNALS):
-        score += 10
+        score += 8
         add_reason(reasons, "Has a clearer path to interview or outreach")
 
     if contains_any(full_text, MISSING_BUT_ACCEPTABLE_SKILLS):
         score -= 5
         add_reason(reasons, "Has a skill gap Abdullah can prepare for")
 
-    if contains_any(full_text, BAD_SIGNALS):
-        score -= 35
-        add_reason(reasons, "May be too senior or outside target path")
-
     if not has_data_context:
-        score -= 15
+        score -= 25
         add_reason(reasons, "Not enough job details to confirm fit")
 
     if opportunity.url and not opportunity.url.startswith("http"):
-        score -= 10
+        score -= 15
+        add_reason(reasons, "Not enough job details to confirm fit")
 
     final_score = max(0, min(score, 100))
 
-    if final_score >= 75:
+    if final_score >= 80:
         priority = "Strong"
-    elif final_score >= 50:
+    elif final_score >= 60:
         priority = "Medium"
     else:
         priority = "Low"
