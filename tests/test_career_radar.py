@@ -14,16 +14,19 @@ class SearchWarningTests(unittest.TestCase):
         self.assertIn("Your account has run out of searches.", message)
 
 
-def verification_result(verified=True, source="company", status="open", years=1, missing=(), platforms=()):
+def verification_result(verified=True, source="company", status=None, years=1, missing=(), platforms=(),
+                        learning=()):
+    status = status or ("open_confirmed" if verified else "unknown")
     return {
         "source": source,
         "source_url": "https://careers.example-employer.sa/jobs/1",
         "status": status,
         "verified": verified,
+        "checked_at": "2026-10-08 20:40",
         "experience_years": years,
         "requirements": {
             "have": ["Excel", "Power BI"],
-            "learning": [],
+            "learning": list(learning),
             "missing": list(missing),
             "missing_platforms": list(platforms),
         },
@@ -53,12 +56,16 @@ class DailyMessageTests(unittest.TestCase):
         items = [make_item(f"Junior Data Analyst {i}", strong, i) for i in range(1, 5)]
         items += [make_item(f"Reporting Analyst {i}", quick, i, location="Jeddah") for i in range(5, 7)]
 
-        with patch_verification():
+        def verify(job):  # the reporting jobs ask for 2 years -> quick apply
+            return verification_result(years=2 if job["title"].startswith("Reporting") else 1)
+
+        with patch.object(career_radar, "verify_job", side_effect=verify):
             scores = [career_radar.get_score(item) for item in items]
         self.assertTrue(all(score >= 80 for score in scores[:4]), scores)
         self.assertTrue(all(60 <= score < 80 for score in scores[4:]), scores)
 
-        with patch.object(career_radar, "get_current_opportunities", return_value=items), patch_verification():
+        with patch.object(career_radar, "get_current_opportunities", return_value=items), \
+                patch.object(career_radar, "verify_job", side_effect=verify):
             job_search_engine.SEARCH_PROBLEMS.clear()
             message = career_radar.build_daily_radar_message()
 
@@ -154,6 +161,67 @@ class VerifiedRecommendationTests(unittest.TestCase):
         message = message_for(item)
         ready = message.split("رسالة جاهزة:")[1]
         self.assertNotIn("SQL", ready)
+
+
+def messages_for(items, **verification):
+    job_search_engine.SEARCH_PROBLEMS.clear()
+    with patch.object(career_radar, "get_current_opportunities", return_value=items), \
+            patch_verification(**verification):
+        return career_radar.build_daily_radar_message()
+
+
+class FitAndReliabilityDisplayTests(unittest.TestCase):
+    def test_fit_and_reliability_are_shown_separately_with_dates(self):
+        item = make_item(*STRONG_JOB, 1)
+        item["posted_at"] = "3 days ago"
+        message = message_for(item)
+        self.assertIn("التوافق:", message)
+        self.assertIn("الموثوقية:", message)
+        self.assertIn("نُشرت: قبل 3 أيام", message)
+        self.assertIn("آخر تحقق: 2026-10-08 20:40", message)
+
+    def test_learning_skill_is_marked_as_not_mastered(self):
+        message = message_for(make_item(*STRONG_JOB, 1), learning=["SQL"])
+        self.assertIn("تتعلمها (مو متقنها): SQL", message)
+
+    def test_finance_role_is_flagged_and_not_green(self):
+        item = make_item("Strategic FP&A & Financial Reporting Analyst", "Excel and Power BI reporting.", 1)
+        message = message_for(item)
+        self.assertNotIn("🟢 قدّم الآن", message)
+        self.assertIn("وظيفة مالية", message)
+
+    def test_finance_roles_get_their_own_section(self):
+        data_job = make_item(*STRONG_JOB, 1)
+        finance_job = make_item("Strategic FP&A & Financial Reporting Analyst", "Excel and Power BI reporting.", 2)
+        message = messages_for([data_job, finance_job])
+        other_field = message.split("🔵 خارج تحليل البيانات")[1].split("📊")[0]
+        self.assertIn("FP&A", other_field)
+        self.assertNotIn("FP&A", message.split("🔵 خارج تحليل البيانات")[0])
+
+    def test_grouped_jobs_are_counted_once(self):
+        first = make_item(*STRONG_JOB, 1)
+        second = make_item("Junior Reporting Analyst", "Fresh graduates. Excel reporting.", 2)
+        second["company"] = first["company"]
+        message = messages_for([first, second])
+        self.assertIn("نفس الشركة 1", message)
+        self.assertIn("قدّم الآن 1،", message)
+
+    def test_old_unconfirmed_posting_is_dropped(self):
+        item = make_item(*STRONG_JOB, 1)
+        item["posted_at"] = "30+ days ago"
+        message = message_for(item, verified=False, source="job_board")
+        self.assertIn("قديمة وغير مؤكدة 1", message)
+        self.assertNotIn("Junior Data Analyst", message.split("📊")[0])
+
+    def test_same_company_jobs_are_grouped(self):
+        first = make_item("Junior MIS Data & Reporting Analyst", "Fresh graduates. Excel, Power BI reporting.", 1)
+        first["company"] = "JASARA Program Management Company"
+        second = make_item("Junior MIS & Dashboards Analyst", "Fresh graduates. Excel, Power BI dashboards.", 2)
+        second["company"] = "JASARA PMC"
+        message = messages_for([first, second])
+        self.assertEqual(message.count("\nالشركة: JASARA"), 1)  # one job card for the company
+        self.assertIn("وظائف ثانية في نفس الشركة", message)
+        self.assertIn("Junior MIS & Dashboards Analyst", message)
 
 
 if __name__ == "__main__":
