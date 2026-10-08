@@ -33,10 +33,16 @@ TARGET_TITLE_TERMS = [
     "bi analyst",
     "business intelligence analyst",
     "reporting analyst",
-    "hr analytics analyst",
-    "people analytics analyst",
-    "workforce analytics analyst",
+    "data reporting",
+    "power bi analyst",
     "analytics analyst",
+    "hr analytics analyst",
+    "people analytics",
+    "people analytics analyst",
+    "workforce analytics",
+    "workforce analytics analyst",
+    "talent analytics",
+    "performance analyst",
     "insights analyst",
     "business analyst",
     "operations analyst",
@@ -45,6 +51,9 @@ TARGET_TITLE_TERMS = [
     "محلل ذكاء أعمال",
     "محلل تقارير",
     "محلل تحليلات",
+    "تحليلات الموارد البشرية",
+    "تحليلات الموظفين",
+    "تحليلات القوى العاملة",
     "إحصائي",
 ]
 
@@ -52,20 +61,20 @@ DATA_CONTEXT_TERMS = [
     "data",
     "analytics",
     "analysis",
-    "business intelligence",
     "bi",
+    "business intelligence",
     "reporting",
     "dashboard",
     "dashboards",
     "power bi",
     "sql",
     "excel",
-    "kpi",
-    "metrics",
     "insights",
+    "metrics",
+    "kpi",
     "visualization",
-    "statistical",
     "statistics",
+    "statistical",
     "تحليل",
     "بيانات",
     "تقارير",
@@ -74,12 +83,13 @@ DATA_CONTEXT_TERMS = [
     "إحصاء",
 ]
 
-ENTRY_TERMS = [
+ENTRY_LEVEL_TERMS = [
     "junior",
     "entry level",
     "fresh graduate",
     "graduate",
     "tamheer",
+    "coop",
     "intern",
     "trainee",
     "0-1",
@@ -94,6 +104,14 @@ ENTRY_TERMS = [
 LOCATION_TERMS = [
     "riyadh",
     "الرياض",
+    "eastern",
+    "dammam",
+    "khobar",
+    "dhahran",
+    "الشرقية",
+    "الدمام",
+    "الخبر",
+    "الظهران",
     "qassim",
     "القصيم",
     "saudi arabia",
@@ -122,8 +140,14 @@ BAD_TERMS = [
     "3 years",
     "minimum 3 years",
     "at least 3 years",
-    "٣ سنوات",
-    "ثلاث سنوات",
+    "بين 3 إلى 10 سنوات",
+    "بين ٣ إلى ١٠ سنوات",
+    "3 إلى 10 سنوات",
+    "٣ إلى ١٠ سنوات",
+    "خبرة عملية تتراوح بين 3",
+    "خبرة عملية تتراوح بين ٣",
+    "خبرة تتراوح بين 3",
+    "خبرة تتراوح بين ٣",
     "data engineer",
     "data scientist",
     "machine learning engineer",
@@ -222,6 +246,7 @@ AGGREGATOR_DOMAINS = [
     "bebee.com",
     "trabajo.org",
     "learn4good.com",
+    "wzzff.com",
 ]
 
 BLOCKED_URL_PARTS = [
@@ -280,6 +305,20 @@ def is_aggregator_url(url: str) -> bool:
     return any(blocked in domain for blocked in AGGREGATOR_DOMAINS)
 
 
+def has_arabic_high_experience(text: str) -> bool:
+    text = text.lower()
+
+    patterns = [
+        r"بين\s*[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
+        r"تتراوح\s+بين\s*[٣3]",
+        r"خبرة\s+عملية\s+تتراوح\s+بين\s*[٣3]",
+        r"خبرة\s+تتراوح\s+بين\s*[٣3]",
+        r"[٣3]\s*(إلى|الى|-)\s*[١1٠0]\s*سنوات",
+    ]
+
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
 def is_direct_job_url(url: str) -> bool:
     lower_url = url.lower()
 
@@ -333,10 +372,7 @@ def is_hris_heavy_role(title: str, text: str) -> bool:
         for term in ["hr data", "hr analytics", "people analytics", "workforce analytics"]
     )
 
-    if not is_hr_role:
-        return False
-
-    return contains_any(text, HRIS_HEAVY_TERMS)
+    return is_hr_role and contains_any(text, HRIS_HEAVY_TERMS)
 
 
 def fetch_page_html(url: str) -> str:
@@ -344,7 +380,7 @@ def fetch_page_html(url: str) -> str:
         response = requests.get(
             url,
             timeout=15,
-            headers={"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/1.0"},
+            headers={"User-Agent": "Mozilla/5.0 AbdullahCareerAgent/1.1"},
         )
         response.raise_for_status()
     except requests.RequestException:
@@ -360,7 +396,7 @@ def fetch_page_text(url: str) -> str:
         return ""
 
     soup = BeautifulSoup(html, "html.parser")
-    return clean_text(soup.get_text(" ")[:8000]).lower()
+    return clean_text(soup.get_text(" ")[:9000]).lower()
 
 
 def extract_original_job_url(url: str) -> str:
@@ -441,10 +477,10 @@ def estimate_location(title: str, snippet: str) -> str:
 
     if "riyadh" in text or "الرياض" in text:
         return "الرياض"
+    if "khobar" in text or "dammam" in text or "dhahran" in text or "eastern" in text or "الشرقية" in text:
+        return "الشرقية"
     if "qassim" in text or "القصيم" in text:
         return "القصيم"
-    if "dammam" in text or "khobar" in text or "eastern" in text or "الشرقية" in text:
-        return "الشرقية"
     if "saudi" in text or "ksa" in text or "السعودية" in text:
         return "السعودية"
 
@@ -464,6 +500,9 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
         return False
 
     if contains_any(combined, BAD_TERMS):
+        return False
+
+    if has_arabic_high_experience(combined):
         return False
 
     has_target_title = contains_any(combined, TARGET_TITLE_TERMS)
@@ -486,6 +525,9 @@ def is_good_result(title: str, snippet: str, url: str) -> bool:
         return False
 
     if contains_any(full_text, BAD_TERMS):
+        return False
+
+    if has_arabic_high_experience(full_text):
         return False
 
     if is_hris_heavy_role(title, full_text):
