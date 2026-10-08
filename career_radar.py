@@ -4,7 +4,7 @@ from config import MEDIUM_SCORE, STRONG_SCORE, WATCH_SCORE
 from application_log import build_application_record
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
-from job_search_engine import search_market_opportunities
+from job_search_engine import get_search_problems, search_market_opportunities
 from interview_strategy import build_interview_strategy
 
 
@@ -365,7 +365,18 @@ def build_no_opportunity_message() -> str:
 لا تضيع وقتك على تقديم ضعيف."""
 
 
+def add_search_warning(message: str) -> str:
+    problems = get_search_problems()
+    if not problems:
+        return message
+    return message + "\n\n⚠️ تنبيه: " + " ".join(problems)
+
+
 def build_daily_radar_message() -> str:
+    return add_search_warning(build_opportunities_message())
+
+
+def build_opportunities_message() -> str:
     opportunities = sort_opportunities(get_current_opportunities())
 
     apply_now = [

@@ -431,10 +431,25 @@ def build_description(title: str, snippet: str) -> str:
     return text[:900]
 
 
+# Problems from the last search run (no key, quota used up...), shown in
+# the daily message so a quiet day isn't mistaken for "no jobs".
+SEARCH_PROBLEMS: list[str] = []
+
+
+def record_search_problem(problem: str) -> None:
+    if problem not in SEARCH_PROBLEMS:
+        SEARCH_PROBLEMS.append(problem)
+
+
+def get_search_problems() -> list[str]:
+    return list(SEARCH_PROBLEMS)
+
+
 def serpapi_search(query: str, limit: int = 5) -> list[dict]:
     api_key = os.getenv("SERPAPI_KEY")
 
     if not api_key:
+        record_search_problem("البحث في Google متوقف: مفتاح SERPAPI_KEY غير موجود في GitHub Secrets.")
         return []
 
     params = {
@@ -449,11 +464,14 @@ def serpapi_search(query: str, limit: int = 5) -> list[dict]:
 
     try:
         response = requests.get(SERPAPI_URL, params=params, timeout=25)
-        response.raise_for_status()
-    except requests.RequestException:
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        record_search_problem("تعذر الاتصال بـ SerpApi.")
         return []
 
-    data = response.json()
+    if data.get("error"):
+        record_search_problem(f"SerpApi: {data['error']}")
+        return []
     results = []
 
     for item in data.get("organic_results", []):
@@ -520,6 +538,7 @@ def choose_queries_for_day(day_number: int, per_run: int) -> list[str]:
 
 def search_market_opportunities(limit: int = 8) -> list[dict]:
     all_results = []
+    SEARCH_PROBLEMS.clear()
     queries = choose_queries_for_day(date.today().toordinal(), SEARCHES_PER_RUN)
 
     for query in queries:

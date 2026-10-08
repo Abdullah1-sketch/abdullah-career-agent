@@ -86,6 +86,17 @@ class SerpApiSearchTests(unittest.TestCase):
         self.assertEqual(results[0]["company"], "Riyadh Pay")
         self.assertEqual(results[0]["location"], "الرياض")
 
+    def test_serpapi_error_is_reported(self):
+        engine.SEARCH_PROBLEMS.clear()
+        self.search({"error": "Your account has run out of searches."})
+        self.assertIn("SerpApi: Your account has run out of searches.", engine.get_search_problems())
+
+    def test_missing_key_is_reported(self):
+        engine.SEARCH_PROBLEMS.clear()
+        with patch.dict("os.environ", {}, clear=True):
+            engine.serpapi_search("any query")
+        self.assertTrue(any("SERPAPI_KEY" in problem for problem in engine.get_search_problems()))
+
 
 class QueryPlanTests(unittest.TestCase):
     def test_each_run_uses_a_limited_number_of_queries(self):
