@@ -24,6 +24,10 @@ from opportunity_scoring import (
 
 SERPAPI_URL = "https://serpapi.com/search.json"
 
+# A search that times out is tried again once.
+SEARCH_ATTEMPTS = 2
+SEARCH_TIMEOUT_SECONDS = 60
+
 # Google Jobs searches inside Saudi Arabia; the city goes in the query.
 SEARCH_LOCATION = "Saudi Arabia"
 
@@ -286,12 +290,17 @@ def fetch_google_jobs(query: str, api_key: str) -> list[dict]:
         "api_key": api_key,
     }
 
-    try:
-        response = requests.get(SERPAPI_URL, params=params, timeout=40)
-    except requests.RequestException as error:
-        reason = str(error).replace(api_key, "***")[:150]
-        record_search_problem(f"تعذر الاتصال بـ SerpApi ({type(error).__name__}: {reason}).")
-        return []
+    response = None
+    for attempt in range(SEARCH_ATTEMPTS):
+        try:
+            response = requests.get(SERPAPI_URL, params=params, timeout=SEARCH_TIMEOUT_SECONDS)
+            break
+        except requests.RequestException as error:
+            if attempt + 1 < SEARCH_ATTEMPTS:
+                continue  # Google Jobs is sometimes slow; one retry usually works
+            reason = str(error).replace(api_key, "***")[:150]
+            record_search_problem(f"تعذر الاتصال بـ SerpApi ({type(error).__name__}: {reason}).")
+            return []
 
     try:
         data = response.json()

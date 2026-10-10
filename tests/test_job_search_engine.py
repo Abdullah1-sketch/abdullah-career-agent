@@ -169,6 +169,20 @@ class SearchProblemTests(unittest.TestCase):
         self.assertIn("Timeout", problems)
         self.assertNotIn("test-key", problems)
 
+    def test_timeout_is_retried_once(self):
+        calls = []
+
+        def timeout_then_jobs(url, params=None, timeout=None):
+            calls.append(params["q"])
+            if len(calls) == 1:
+                raise engine.requests.Timeout("Read timed out.")
+            return FakeResponse({"jobs_results": [google_job()]})
+
+        results, _, _ = run_search(get=timeout_then_jobs)
+        self.assertEqual(calls[0], calls[1])  # same query asked again
+        self.assertEqual(engine.get_search_problems(), [])
+        self.assertEqual(len(results), 1)
+
     def test_non_json_reply_reports_status_code(self):
         class HtmlResponse:
             status_code = 502
