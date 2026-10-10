@@ -11,7 +11,17 @@ class SearchWarningTests(unittest.TestCase):
         job_search_engine.SEARCH_PROBLEMS.append("SerpApi: Your account has run out of searches.")
         with patch.object(career_radar, "get_current_opportunities", return_value=[]):
             message = career_radar.build_daily_radar_message()
-        self.assertIn("Your account has run out of searches.", message)
+        self.assertIn("⚠️ رصيد SerpApi خلص", message)
+
+    def test_connection_problem_is_one_simple_line(self):
+        job_search_engine.SEARCH_PROBLEMS.clear()
+        job_search_engine.SEARCH_PROBLEMS.append(
+            "تعذر الاتصال بـ SerpApi (ReadTimeout: HTTPSConnectionPool(host='serpapi.com', port=443): Read timed out.)."
+        )
+        with patch.object(career_radar, "get_current_opportunities", return_value=[]):
+            message = career_radar.build_daily_radar_message()
+        self.assertIn("⚠️ البحث ما اكتمل اليوم", message)
+        self.assertNotIn("HTTPSConnectionPool", message)
 
 
 def verification_result(verified=True, source="company", status=None, years=1, missing=(), platforms=(),
@@ -85,9 +95,23 @@ class CheckSummaryTests(unittest.TestCase):
         with patch.object(career_radar, "get_current_opportunities", return_value=items), patch_verification():
             message = career_radar.build_daily_radar_message()
 
-        self.assertIn("📊", message)
-        self.assertIn("فحصت 9", message)
-        self.assertIn(f"{job_search_engine.REJECT_SENIOR_TITLE} 5", message)
+        self.assertIn("فحصت 9 وظيفة", message)
+        self.assertNotIn(job_search_engine.REJECT_SENIOR_TITLE, message)  # details go to the Actions log
+
+    def test_rejection_details_go_to_github_actions_notice(self):
+        import io
+        from contextlib import redirect_stdout
+
+        job_search_engine.SEARCH_PROBLEMS.clear()
+        job_search_engine.SEARCH_STATS.clear()
+        job_search_engine.SEARCH_STATS.update({"found": 9, f"rejected:{job_search_engine.REJECT_SENIOR_TITLE}": 5})
+        output = io.StringIO()
+        with patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}), redirect_stdout(output), \
+                patch.object(career_radar, "get_current_opportunities", return_value=[]):
+            career_radar.build_daily_radar_message()
+        notices = [line for line in output.getvalue().splitlines() if "title=Report details" in line]
+        self.assertEqual(len(notices), 1)
+        self.assertIn(f"{job_search_engine.REJECT_SENIOR_TITLE} 5", notices[0])
 
 
 class CurrentOpportunitiesTests(unittest.TestCase):
@@ -111,6 +135,7 @@ STRONG_JOB = ("Junior Data Analyst", "Fresh graduates. Excel, Power BI dashboard
 
 def message_for(item, **verification):
     job_search_engine.SEARCH_PROBLEMS.clear()
+    job_search_engine.SEARCH_STATS.clear()
     with patch.object(career_radar, "get_current_opportunities", return_value=[item]), \
             patch_verification(**verification):
         return career_radar.build_daily_radar_message()
@@ -119,15 +144,13 @@ def message_for(item, **verification):
 class VerifiedRecommendationTests(unittest.TestCase):
     def test_green_needs_a_verified_original_posting(self):
         message = message_for(make_item(*STRONG_JOB, 1))
-        self.assertIn("🟢 قدّم الآن", message)
-        self.assertIn("✅", message)
+        self.assertIn("✅ قدّم الآن", message)
         self.assertIn("https://careers.example-employer.sa/jobs/1", message)
 
     def test_strong_but_unverified_job_is_not_green(self):
         message = message_for(make_item(*STRONG_JOB, 1), verified=False, source="linkedin", status="unknown")
-        self.assertNotIn("🟢 قدّم الآن", message)
-        self.assertIn("تحقق أول", message)
-        self.assertIn("⚠️", message)
+        self.assertNotIn("✅ قدّم الآن", message)
+        self.assertIn("⚠️ قوية، بس تأكد إنها مفتوحة قبل التقديم", message)
 
     def test_no_outreach_advice_for_unverified_job(self):
         message = message_for(make_item(*STRONG_JOB, 1), verified=False, source="job_board", status="unknown")
@@ -139,36 +162,37 @@ class VerifiedRecommendationTests(unittest.TestCase):
         message = message_for(item, verified=False, status="closed")
         self.assertNotIn(item["url"], message)
         self.assertNotIn("https://careers.example-employer.sa/jobs/1", message)
-        self.assertIn("مغلقة 1", message)
+        self.assertIn("ما فيه وظيفة مناسبة اليوم", message)
 
     def test_job_asking_three_plus_years_on_original_page_is_not_recommended(self):
         message = message_for(make_item(*STRONG_JOB, 1), years=3)
-        self.assertNotIn("قدّم", message.split("📊")[0])
-        self.assertIn("تطلب خبرة 3+ 1", message)
+        self.assertIn("ما فيه وظيفة مناسبة اليوم", message)
+        self.assertNotIn("https://", message)
 
     def test_missing_platform_skill_is_not_green(self):
         item = make_item("Business & Data Analyst - ServiceNow HRSD", "Excel and Power BI reporting.", 1)
         message = message_for(item, missing=["ServiceNow"], platforms=["ServiceNow"])
-        self.assertNotIn("🟢 قدّم الآن", message)
-        self.assertIn("ServiceNow", message)
+        self.assertNotIn("✅ قدّم الآن", message)
 
     def test_required_experience_is_shown_from_the_posting(self):
         message = message_for(make_item(*STRONG_JOB, 1), years=1)
-        self.assertIn("خبرة: سنة", message)
+        self.assertIn("خبرة سنة", message)
 
     def test_message_is_short(self):
         items = [make_item(f"Junior Data Analyst {i}", STRONG_JOB[1], i) for i in range(1, 6)]
         message = messages_for(items)
         self.assertNotIn("رسالة جاهزة", message)
-        self.assertNotIn("خطة الوصول", message)
-        cards = [block for block in message.split("\n\n") if block.startswith("🟢 ")]
-        self.assertEqual(len(cards), 5)
-        for card in cards:
-            self.assertLessEqual(len(card.splitlines()), 6, card)
+        for jargon in ["توافق", "موثوقية", "آخر تحقق", "غير معروف", "غير مذكورة"]:
+            self.assertNotIn(jargon, message)
+        numbered = [line for line in message.splitlines() if line[:2] in {f"{n}." for n in range(1, 10)}]
+        self.assertEqual(len(numbered), 5)
+        # header + section title + 5 jobs x 3 lines + summary + blank lines
+        self.assertLessEqual(len(message.splitlines()), 24)
 
 
 def messages_for(items, **verification):
     job_search_engine.SEARCH_PROBLEMS.clear()
+    job_search_engine.SEARCH_STATS.clear()
     with patch.object(career_radar, "get_current_opportunities", return_value=items), \
             patch_verification(**verification):
         return career_radar.build_daily_radar_message()
@@ -179,43 +203,39 @@ class FitAndReliabilityDisplayTests(unittest.TestCase):
         item = make_item(*STRONG_JOB, 1)
         item["posted_at"] = "3 days ago"
         message = message_for(item)
-        self.assertIn("توافق 97", message)
-        self.assertIn("موثوقية ✅", message)
+        self.assertIn("مناسبة لك 97%", message)
         self.assertIn("نُشرت قبل 3 أيام", message)
-        self.assertIn("آخر تحقق 2026-10-08 20:40", message)
+        self.assertNotIn("موثوقية", message)
 
     def test_learning_skill_is_marked_as_not_mastered(self):
         message = message_for(make_item(*STRONG_JOB, 1), learning=["SQL"])
-        self.assertIn("تتعلم: SQL", message)
+        self.assertIn("راجع SQL", message)
 
     def test_finance_role_is_flagged_and_not_green(self):
         item = make_item("Strategic FP&A & Financial Reporting Analyst", "Excel and Power BI reporting.", 1)
         message = message_for(item)
-        self.assertNotIn("🟢 قدّم الآن", message)
-        self.assertIn("مالية", message)
+        self.assertNotIn("✅ قدّم الآن", message)
+        self.assertNotIn("FP&A", message)
 
-    def test_finance_roles_get_their_own_section(self):
+    def test_other_field_jobs_are_left_out(self):
         data_job = make_item(*STRONG_JOB, 1)
         finance_job = make_item("Strategic FP&A & Financial Reporting Analyst", "Excel and Power BI reporting.", 2)
         message = messages_for([data_job, finance_job])
-        other_field = message.split("🔵 خارج البيانات")[1].split("📊")[0]
-        self.assertIn("FP&A", other_field)
-        self.assertNotIn("FP&A", message.split("🔵 خارج البيانات")[0])
+        self.assertIn("Junior Data Analyst", message)
+        self.assertNotIn("FP&A", message)
 
     def test_grouped_jobs_are_counted_once(self):
         first = make_item(*STRONG_JOB, 1)
         second = make_item("Junior Reporting Analyst", "Fresh graduates. Excel reporting.", 2)
         second["company"] = first["company"]
         message = messages_for([first, second])
-        self.assertIn("نفس الشركة 1", message)
-        self.assertIn("أرسلت 1", message)
+        self.assertIn("أرسلت لك 1", message)
 
     def test_old_unconfirmed_posting_is_dropped(self):
         item = make_item(*STRONG_JOB, 1)
         item["posted_at"] = "30+ days ago"
         message = message_for(item, verified=False, source="job_board")
-        self.assertIn("قديمة وغير مؤكدة 1", message)
-        self.assertNotIn("Junior Data Analyst", message.split("📊")[0])
+        self.assertNotIn("Junior Data Analyst", message)
 
     def test_same_company_jobs_are_grouped(self):
         first = make_item("Junior MIS Data & Reporting Analyst", "Fresh graduates. Excel, Power BI reporting.", 1)
@@ -224,8 +244,24 @@ class FitAndReliabilityDisplayTests(unittest.TestCase):
         second["company"] = "JASARA PMC"
         message = messages_for([first, second])
         self.assertEqual(message.count("JASARA"), 1)  # one job card for the company
-        self.assertIn("+ نفس الشركة", message)
-        self.assertIn("Junior MIS & Dashboards Analyst", message)
+        self.assertNotIn("Junior MIS & Dashboards Analyst", message)
+
+
+class ReadableTextTests(unittest.TestCase):
+    def test_long_marketing_title_is_shortened(self):
+        self.assertEqual(
+            career_radar.short_title("Data Analyst in Riyadh — Full-Time, Impactful Analytics"), "Data Analyst in Riyadh"
+        )
+        self.assertEqual(career_radar.short_title("Tamheer Trainee – Data Analyst (IT)"),
+                         "Tamheer Trainee – Data Analyst (IT)")
+
+    def test_company_suffix_is_removed(self):
+        self.assertEqual(career_radar.short_company("H. M. Al Rugaib & Sons Trading Co"), "H. M. Al Rugaib & Sons")
+        self.assertEqual(career_radar.short_company("JASARA Program Management Company"), "JASARA Program Management")
+
+    def test_long_missing_list_is_capped(self):
+        message = message_for(make_item(*STRONG_JOB, 1), missing=["Python", "Tableau", "SAS", "Azure", "AWS"])
+        self.assertIn("ينقصك Python، Tableau +3", message)
 
 
 if __name__ == "__main__":

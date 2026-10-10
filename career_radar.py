@@ -22,7 +22,7 @@ from job_verification import (
 )
 from manual_opportunities import get_manual_opportunities
 from company_career_scanner import scan_company_career_pages
-from job_search_engine import get_search_problems, get_search_stats, search_market_opportunities
+from job_search_engine import get_search_problems, get_search_stats, publish_notice, search_market_opportunities
 
 
 BLOCKED_REPORT_TERMS = [
@@ -116,9 +116,9 @@ def build_opportunity(opportunity_data: dict) -> Opportunity:
     )
 
 
-APPLY_NOW = "🟢 قدّم الآن"
-VERIFY_FIRST = "🟡 تحقق أول"
-QUICK_APPLY = "🟡 تقديم سريع"
+APPLY_NOW = "✅ قدّم الآن"
+VERIFY_FIRST = "⚠️ قوية، بس تأكد إنها مفتوحة قبل التقديم"
+QUICK_APPLY = "🟡 تستاهل تقديم سريع"
 WATCH = "🟡 راقب"
 OTHER_FIELD = "🔵 خارج البيانات"
 LOW = "⚪ راقب"
@@ -128,16 +128,6 @@ EXCLUDED_CLOSED = "مغلقة"
 EXCLUDED_HIGH_EXPERIENCE = "تطلب خبرة 3+"
 EXCLUDED_OLD = "قديمة وغير مؤكدة"
 
-RELIABILITY_LABELS = {"high": "✅", "medium": "⚠️ متوسطة", "low": "⚠️ ضعيفة"}
-
-# One short next step per category.
-ACTIONS = {
-    APPLY_NOW: "قدّم اليوم وراسل شخص من فريق البيانات",
-    VERIFY_FIRST: "تأكد إن التقديم مفتوح وبعدها قدّم",
-    QUICK_APPLY: "قدّم سريع بدون تخصيص",
-    WATCH: "راقبها بس",
-}
-SHORT_ROLE_LABELS = {"finance": "مالية", "specialty": "تخصص آخر"}
 
 
 def choose_category(
@@ -224,62 +214,73 @@ def best_link(opportunity_data: dict) -> str:
     return opportunity_data["url"]
 
 
+TITLE_SEPARATORS = re.compile(r"\s+[—–|-]\s+")
+TITLE_ROLE_WORDS = ["analyst", "analysis", "analytics", "data", "محلل", "تحليل", "بيانات"]
+MAX_TITLE_LENGTH = 40
+COMPANY_SUFFIXES = re.compile(r"\s+(trading co\.?|company|co\.?|llc|ltd\.?|inc\.?)$", re.I)
+MAX_SKILLS_LISTED = 2
+
+
+def short_title(title: str) -> str:
+    """Drop marketing after a dash: "Data Analyst in Riyadh — Full-Time, ..." -> "Data Analyst in Riyadh"."""
+    if len(title) <= MAX_TITLE_LENGTH:
+        return title
+    for part in TITLE_SEPARATORS.split(title):
+        if contains_any(part, TITLE_ROLE_WORDS):
+            return part.strip()
+    return title[:MAX_TITLE_LENGTH].rstrip() + "…"
+
+
+def short_company(company: str) -> str:
+    return COMPANY_SUFFIXES.sub("", company.strip())
+
+
 def describe_experience(years: int | None) -> str:
-    if years is None:
-        return "غير مذكورة"
-    if years == 0:
-        return "بدون"
-    if years == 1:
-        return "سنة"
-    if years == 2:
-        return "سنتين"
-    return f"{years}+ سنوات"
+    return {0: "بدون خبرة", 1: "خبرة سنة", 2: "خبرة سنتين"}.get(years, f"خبرة {years}+ سنوات")
 
 
-def describe_posted(days: int | None) -> str:
-    if days is None:
-        return "غير معروف"
+def describe_posted(days: int) -> str:
     if days == 0:
-        return "اليوم"
+        return "نُشرت اليوم"
     if days == 1:
-        return "أمس"
+        return "نُشرت أمس"
     if days == 2:
-        return "قبل يومين"
+        return "نُشرت قبل يومين"
     if days <= 10:
-        return f"قبل {days} أيام"
-    return f"قبل {days} يوم"
+        return f"نُشرت قبل {days} أيام"
+    return f"نُشرت قبل {days} يوم"
 
 
-def describe_gaps(verification: dict | None) -> str:
-    if not verification:
-        return ""
-    requirements = verification["requirements"]
-    parts = []
-    if requirements["missing"]:
-        parts.append("ناقص: " + "، ".join(requirements["missing"]))
-    if requirements["learning"]:
-        parts.append("تتعلم: " + "، ".join(requirements["learning"]))
-    return " | " + " | ".join(parts) if parts else ""
+def describe_missing(skills: list[str]) -> str:
+    listed = "، ".join(skills[:MAX_SKILLS_LISTED])
+    extra = len(skills) - MAX_SKILLS_LISTED
+    return f"ينقصك {listed}" + (f" +{extra}" if extra > 0 else "")
 
 
-def build_card(opportunity_data: dict) -> str:
-    """Five or six short lines per job."""
-    assessment = assess(opportunity_data)
+def job_details(assessment: dict) -> str:
+    """Second line of a job: fit, then only the facts that are known."""
     verification = assessment["verification"]
-    years = verification["experience_years"] if verification else None
-    reliability_label = RELIABILITY_LABELS.get(assessment["reliability"], "⚠️ ما تحققت")
-    lines = [
-        f"{assessment['category']}: {opportunity_data['title']} | {opportunity_data['company']} | "
-        f"{estimate_city(opportunity_data)}",
-        f"توافق {assessment['score']} | موثوقية {reliability_label} | نُشرت {describe_posted(assessment['posted_days'])}",
-        f"خبرة: {describe_experience(years)}{describe_gaps(verification)}",
-        f"👈 {ACTIONS.get(assessment['category'], ACTIONS[WATCH])}",
-        best_link(opportunity_data),
-    ]
-    related = opportunity_data.get("related", [])
-    if related:
-        lines.append("+ نفس الشركة: " + "، ".join(item["title"] for item in related))
-    return "\n".join(lines)
+    details = [f"مناسبة لك {assessment['score']}%"]
+    if verification and verification["experience_years"] is not None:
+        details.append(describe_experience(verification["experience_years"]))
+    if assessment["posted_days"] is not None:
+        details.append(describe_posted(assessment["posted_days"]))
+    if verification and verification["requirements"]["missing"]:
+        details.append(describe_missing(verification["requirements"]["missing"]))
+    if verification and verification["requirements"]["learning"]:
+        details.append("راجع " + "، ".join(verification["requirements"]["learning"]))
+    return " • ".join(details)
+
+
+def build_job_lines(number: int, opportunity_data: dict) -> str:
+    """Three lines: what and where, why it fits, link."""
+    title = short_title(opportunity_data["title"])
+    company = short_company(opportunity_data["company"])
+    return (
+        f"{number}. {title} — {company} — {estimate_city(opportunity_data)}\n"
+        f"   {job_details(assess(opportunity_data))}\n"
+        f"   {best_link(opportunity_data)}"
+    )
 
 
 def search_market_safely() -> list[dict]:
@@ -330,21 +331,28 @@ def sort_opportunities(opportunities: list[dict]) -> list[dict]:
 
 
 def build_no_opportunity_message() -> str:
-    return "ما فيه فرصة مناسبة اليوم."
+    return "ما فيه وظيفة مناسبة اليوم."
+
+
+def simple_search_warning(problems: list[str]) -> str:
+    text = " ".join(problems)
+    if "SERPAPI_KEY" in text:
+        return "⚠️ البحث في Google متوقف: مفتاح SERPAPI_KEY ناقص في GitHub."
+    if "run out of searches" in text.lower():
+        return "⚠️ رصيد SerpApi خلص هالشهر، البحث في Google متوقف."
+    return "⚠️ البحث ما اكتمل اليوم، ممكن فيه وظائف ما وصلت."
 
 
 def add_search_warning(message: str) -> str:
     problems = get_search_problems()
     if not problems:
         return message
-    return message + "\n⚠️ " + " ".join(problems)
+    return message + "\n" + simple_search_warning(problems)
 
 
-def build_summary(opportunities: list[dict], shown: int) -> str:
-    """One line: how many were checked, sent and dropped (with reasons)."""
-    stats = get_search_stats()
-    dropped = dict(stats["rejected"])
-
+def count_dropped(opportunities: list[dict]) -> dict:
+    """Why jobs were not sent: search filters plus checks on the posting."""
+    dropped = dict(get_search_stats()["rejected"])
     for item in opportunities:
         if item.get("is_real_job") is False:
             continue
@@ -353,27 +361,39 @@ def build_summary(opportunities: list[dict], shown: int) -> str:
             reason = "نفس الشركة"
         elif assessment["excluded"]:
             reason = assessment["excluded"]
-        elif assessment["category"] == LOW:
+        elif assessment["category"] == OTHER_FIELD:
+            reason = "خارج البيانات"
+        elif assessment["category"] in (LOW, WATCH):
             reason = "ضعيفة"
         else:
             continue
         dropped[reason] = dropped.get(reason, 0) + 1
+    return dropped
 
-    line = f"📊 فحصت {stats['found']} | أرسلت {shown} | استبعدت {sum(dropped.values())}"
-    if dropped:
-        reasons = sorted(dropped.items(), key=lambda pair: -pair[1])
-        line += ": " + "، ".join(f"{reason} {count}" for reason, count in reasons)
 
-    checked = [assess(item)["verification"]["checked_at"] for item in opportunities if assess(item)["verification"]]
-    if checked:
-        line += f"\nآخر تحقق {max(checked)}"
-    return line
+def publish_report_details(opportunities: list[dict]) -> None:
+    """Full details for reviewing the filters, kept out of the Telegram message."""
+    dropped = count_dropped(opportunities)
+    lines = ["Dropped: " + ", ".join(f"{reason} {count}" for reason, count in dropped.items())]
+    lines += [f"Search problem: {problem}" for problem in get_search_problems()]
+    for item in opportunities:
+        assessment = assess(item)
+        verification = assessment["verification"] or {}
+        lines.append(
+            f"{assessment['category']} | {item.get('title', '')} | {item.get('company', '')} | "
+            f"fit {assessment['score']} | reliability {assessment['reliability']} | "
+            f"status {verification.get('status')} | checked {verification.get('checked_at')}"
+        )
+    publish_notice("Report details", "\n".join(lines))
 
 
 def build_daily_radar_message() -> str:
     opportunities = sort_opportunities(get_current_opportunities())
     message, shown = build_opportunities_message(opportunities)
-    return add_search_warning(message + "\n\n" + build_summary(opportunities, shown))
+    publish_report_details(opportunities)
+    found = get_search_stats()["found"]
+    summary = f"فحصت {found} وظيفة وأرسلت لك {shown}."
+    return add_search_warning(message + "\n\n" + summary)
 
 
 COMPANY_FILLER_WORDS = {
@@ -403,17 +423,6 @@ def group_same_company(opportunities: list[dict]) -> list[dict]:
     return grouped
 
 
-MAX_OTHER_FIELD_JOBS = 3
-
-
-def build_other_field_lines(opportunities: list[dict]) -> list[str]:
-    lines = []
-    for item in opportunities[:MAX_OTHER_FIELD_JOBS]:
-        role = SHORT_ROLE_LABELS[assess(item)["fit"]["role"]]
-        lines.append(f"- {item['title']} | {item['company']} ({role})\n  {best_link(item)}")
-    return lines
-
-
 def build_opportunities_message(opportunities: list[dict]) -> tuple[str, int]:
     """The job part of the message, and how many jobs it shows."""
     opportunities = group_same_company(opportunities)
@@ -421,18 +430,23 @@ def build_opportunities_message(opportunities: list[dict]) -> tuple[str, int]:
     def in_category(category: str) -> list[dict]:
         return [item for item in opportunities if assess(item)["category"] == category]
 
-    main_jobs = (
-        in_category(APPLY_NOW)[:MAX_APPLY_NOW_JOBS]
-        + in_category(VERIFY_FIRST)[:MAX_APPLY_NOW_JOBS]
-        + in_category(QUICK_APPLY)[:MAX_QUICK_APPLY_JOBS]
-    )
-    if not main_jobs:
-        main_jobs = in_category(WATCH)[:1]
-    other_field = in_category(OTHER_FIELD)[:MAX_OTHER_FIELD_JOBS]
+    sections_by_category = [
+        (APPLY_NOW, in_category(APPLY_NOW)[:MAX_APPLY_NOW_JOBS]),
+        (VERIFY_FIRST, in_category(VERIFY_FIRST)[:MAX_APPLY_NOW_JOBS]),
+        (QUICK_APPLY, in_category(QUICK_APPLY)[:MAX_QUICK_APPLY_JOBS]),
+    ]
+    shown = sum(len(jobs) for _, jobs in sections_by_category)
+    if not shown:
+        return build_no_opportunity_message(), 0
 
-    sections = [build_card(item) for item in main_jobs] or [build_no_opportunity_message()]
-    if other_field:
-        sections.append(f"{OTHER_FIELD} (للعلم):\n" + "\n".join(build_other_field_lines(other_field)))
-
-    shown = len(main_jobs) + len(other_field)
+    sections = [f"💼 وظائف اليوم: {shown}"]
+    number = 1
+    for title, jobs in sections_by_category:
+        if not jobs:
+            continue
+        lines = [title]
+        for item in jobs:
+            lines.append(build_job_lines(number, item))
+            number += 1
+        sections.append("\n".join(lines))
     return "\n\n".join(sections), shown
