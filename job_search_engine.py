@@ -262,13 +262,16 @@ def log_result(decision: str, title: str, company: str, url: str) -> None:
     print(f"[search] {line}")
 
 
-def publish_search_log_notice() -> None:
-    """Put all result lines in one GitHub Actions notice (readable through the API)."""
-    if os.getenv("GITHUB_ACTIONS") != "true" or not SEARCH_LOG:
+def publish_notice(title: str, text: str) -> None:
+    """Show text as one GitHub Actions notice (readable through the API). No-op elsewhere."""
+    if os.getenv("GITHUB_ACTIONS") != "true" or not text:
         return
-    text = "\n".join(SEARCH_LOG)
     escaped = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-    print(f"::notice title=Search results::{escaped}")
+    print(f"::notice title={title}::{escaped}")
+
+
+def publish_search_log_notice() -> None:
+    publish_notice("Search results", "\n".join(SEARCH_LOG))
 
 
 # ---------- Searching ----------
